@@ -44,6 +44,27 @@ export interface GddAssertion {
   expect: Record<string, unknown>;
 }
 
+// ── the gdd entity + control tables (read-only context for the driver) ──────
+// These let the `event`/win-path driver stay GENERIC across archetypes: it maps
+// the target reference to the entity's functional type via the gdd, and derives
+// which documented keys move the player toward the goal. Both are read straight
+// off the gdd (the oracle) — the harness never invents a control or a constant.
+
+export interface GddEntity {
+  id: string;
+  role?: string; // gdd role: player|collectible|obstacle|goal|enemy|tower|...
+}
+
+export interface GddControl {
+  input: string; // a DOM key name (the player's documented control)
+  action: string; // a free-text description ("move right", "jump", ...)
+}
+
+export interface GddContext {
+  entities?: GddEntity[];
+  controls?: GddControl[];
+}
+
 // ── the per-assertion result (report.schema assertions[] item) ──────────────
 export interface AssertionResult {
   id: string;
@@ -123,29 +144,38 @@ async function applySetup(
 
 /**
  * Resolve an entity id to a canvas-relative click position via __GAME__.entities.
- * Returns null if the entity can't be located (the assertion errors).
+ * Resolves by id OR type OR gdd role (generic, like the event driver). Returns
+ * null if the entity can't be located (the assertion errors).
  */
 async function resolveEntityPosition(
   page: Page,
   entityId: string,
+  ctx: GddContext,
 ): Promise<{ x: number; y: number } | null> {
-  return page.evaluate((id) => {
+  const refs = resolveTargetRefs(entityId, ctx);
+  return page.evaluate((refList) => {
     const game = (window as any).__GAME__;
     if (!game || !Array.isArray(game.entities)) return null;
-    const ent = game.entities.find((e: any) => e && (e.id === id || e.type === id));
+    const set = new Set(refList as string[]);
+    const ent = game.entities.find(
+      (e: any) => e && (set.has(e.id) || set.has(e.type)),
+    );
     if (!ent) return null;
     return { x: ent.x, y: ent.y };
-  }, entityId);
+  }, refs);
 }
 
 /**
  * Fire `input` (grammar §2.4). Re-focuses the canvas first.
  * Returns an error message if the input could not be fired (e.g. unlocatable
- * click target), else null.
+ * click target), else null. `ctx` carries the gdd entity + control tables so the
+ * `event`/win-path driver can stay generic (resolve the target by role, derive
+ * movement keys from the documented controls).
  */
 async function fireInput(
   page: Page,
   input: GddInput | undefined,
+  ctx: GddContext,
 ): Promise<string | null> {
   if (!input || input.type === 'none' || !input.type) return null;
 
@@ -168,23 +198,25 @@ async function fireInput(
     }
     case 'click': {
       if (!input.target) return `click input missing 'target'`;
-      const pos = await resolveEntityPosition(page, input.target);
+      const pos = await resolveEntityPosition(page, input.target, ctx);
       if (!pos) return `click target '${input.target}' could not be located in entities`;
       // Canvas content has no DOM — click by coordinate (grammar §2.4).
       await page.locator(CANVAS).click({ position: { x: pos.x, y: pos.y } });
       return null;
     }
     case 'event': {
-      // Drive the REAL interaction the event names. v1 supports the
-      // 'overlap:a,b' / entity-target forms by moving the player toward the
-      // target with held input so the overlap happens for real. We NEVER
-      // setState the observed outcome. If the event names a target entity we
-      // can locate, walk toward it; otherwise this is an unsupported event form
-      // and the assertion errors honestly (a real coverage gap to surface).
-      const handled = await driveEvent(page, input.target);
-      if (!handled) {
-        return `event '${input.target ?? ''}' not drivable by natural input in v1 (no synthetic trigger)`;
-      }
+      // Drive the REAL interaction the event names: fire the player's OWN
+      // documented controls toward the named target until the real interaction
+      // fires (target consumed / true overlap / the observed field already
+      // satisfied) OR a bounded step/time budget is exhausted. We NEVER setState
+      // the observed outcome — we drive input, not the verdict. If the target
+      // cannot be resolved at all, that is an honest authoring error (the event
+      // names an entity not in the gdd). If it resolves but the player can't
+      // reach it within budget, `driveEvent` returns OK anyway and the comparator
+      // reads the real (still-unwon) state and FAILS honestly — the
+      // unwinnable-level signal, never an error-as-"unsupported".
+      const driven = await driveEvent(page, input.target, ctx);
+      if (!driven.ok) return driven.message ?? `event '${input.target ?? ''}' could not be driven`;
       return null;
     }
     default:
@@ -192,69 +224,260 @@ async function fireInput(
   }
 }
 
+// ── generic target resolution + control derivation (the de-hardcoded core) ──
+
 /**
- * Best-effort REAL driver for `event` inputs. Supports `overlap:player,<entity>`
- * and a bare `<entity>` target by walking the player horizontally toward the
- * target entity until they overlap (bounded). Returns true if it drove a real
- * interaction, false if the form is unsupported (→ honest error).
- *
- * This deliberately uses ONLY held movement input (the real input path) — it
- * never mutates the observed outcome.
+ * Resolve a gdd target REFERENCE (e.g. 'exit', or the 2nd arg of
+ * 'overlap:player,exit') to the functional entity-TYPE the hook tags it with.
+ * The gdd entity table maps a referenced id to its `role`, which IS the hook's
+ * entity type vocabulary (player|collectible|obstacle|goal|enemy|tower|...). So
+ * a gdd entity `{id:'exit', role:'goal'}` referenced as 'exit' resolves to type
+ * 'goal' — exactly what the live `__GAME__.entities[].type` carries. We return
+ * BOTH the original ref and the resolved role so the page-side lookup can match
+ * on id OR type OR role (whichever the W4 build tagged).
  */
-async function driveEvent(page: Page, target?: string): Promise<boolean> {
-  if (!target) return false;
-  // Parse `overlap:player,coin` → targetType 'coin'; or a bare 'coin'.
-  let targetRef = target;
+function resolveTargetRefs(ref: string, ctx: GddContext): string[] {
+  const refs = new Set<string>([ref]);
+  const ent = (ctx.entities ?? []).find((e) => e.id === ref);
+  if (ent?.role) refs.add(ent.role);
+  return [...refs];
+}
+
+/**
+ * Parse the event target into the entity reference the player must reach. Forms:
+ *   - 'overlap:a,b'  → the SECOND operand (the thing the player overlaps WITH)
+ *   - bare '<entity>' → itself
+ * The first operand of an overlap is conventionally the player; we drive toward
+ * the second. Generic — no per-game names.
+ */
+function parseEventTargetRef(target: string): string {
   const m = target.match(/^overlap:\s*[a-z_]+\s*,\s*([a-z_]+)\s*$/i);
-  if (m) targetRef = m[1];
+  return m ? m[1] : target;
+}
 
-  // Locate the target's x relative to the player's x.
-  const info = await page.evaluate((ref) => {
-    const game = (window as any).__GAME__;
-    if (!game) return null;
-    const player = game.player;
-    if (!player) return null;
-    const ent = Array.isArray(game.entities)
-      ? game.entities.find((e: any) => e && (e.id === ref || e.type === ref))
-      : null;
-    if (!ent) return null;
-    return { px: player.x, ex: ent.x };
-  }, targetRef);
+/** A documented control mapped to a movement INTENT the driver can issue. */
+interface MovementKeys {
+  /** key that increases player.x (move right), if documented. */
+  right?: string;
+  /** key that decreases player.x (move left), if documented. */
+  left?: string;
+  /** key that decreases player.y (jump / move up), if documented. */
+  up?: string;
+  /** key that increases player.y (move down), if documented. */
+  down?: string;
+}
 
-  if (!info) return false;
+/**
+ * Derive movement keys from the player's DOCUMENTED controls[] — never genre
+ * constants. We classify each control by (a) its DOM key name and (b) keywords
+ * in its action text, so it generalizes across archetypes (arrow keys, WASD,
+ * "move right"/"jump"/"up"). A control with no movement meaning (e.g.
+ * "start/restart") is ignored. If controls[] is absent/empty, we fall back to
+ * the universal arrow keys (the engine's default movement binding).
+ */
+function deriveMovementKeys(controls: GddControl[] | undefined): MovementKeys {
+  const keys: MovementKeys = {};
+  const classify = (key: string, action: string): void => {
+    const k = key.toLowerCase();
+    const a = (action ?? '').toLowerCase();
+    const has = (...words: string[]) => words.some((w) => a.includes(w));
+    // Jump / up first (a jump is the canonical "reduce y" verb in 2D games).
+    if (k === 'arrowup' || k === 'w' || has('jump', 'up', 'rise', 'fly', 'thrust')) {
+      keys.up ??= key;
+      return;
+    }
+    if (k === 'arrowdown' || k === 's' || has('down', 'crouch', 'descend')) {
+      keys.down ??= key;
+      return;
+    }
+    if (k === 'arrowright' || k === 'd' || has('right', 'forward', 'east')) {
+      keys.right ??= key;
+      return;
+    }
+    if (k === 'arrowleft' || k === 'a' || has('left', 'back', 'west')) {
+      keys.left ??= key;
+      return;
+    }
+  };
+  for (const c of controls ?? []) {
+    if (c && typeof c.input === 'string') classify(c.input, c.action);
+  }
+  // Universal fallback: the engine binds arrow keys for movement by default.
+  keys.right ??= 'ArrowRight';
+  keys.left ??= 'ArrowLeft';
+  keys.up ??= 'ArrowUp';
+  return keys;
+}
 
-  // Walk toward the target with the real arrow key, polling until overlap or a
-  // bounded time elapses (wait-on-state, not a blind sleep).
-  const dirKey = info.ex >= info.px ? 'ArrowRight' : 'ArrowLeft';
+const DRIVE_OVERLAP_PX = 36; // 2D overlap proxy radius (any archetype)
+const DRIVE_STEP_MS = 140; // per-step hold duration (a short, real input burst)
+const DRIVE_MAX_STEPS = 24; // bounded step budget
+const DRIVE_BUDGET_MS = 6000; // bounded wall-clock budget
+
+interface DriveResult {
+  /** false ONLY when the input could not be fired at all (honest error). */
+  ok: boolean;
+  message?: string;
+}
+
+/**
+ * GENERIC win-path / event driver. Fires the player's OWN documented controls to
+ * reduce the distance to the named target until the REAL interaction fires, or a
+ * bounded step/time budget is exhausted. Archetype-agnostic:
+ *
+ *   - Resolve the target by gdd role → live entity type/id (no literal-name dep).
+ *   - Each step: read live player + target positions off __GAME__; pick the keys
+ *     (from the documented controls) that REDUCE |dx| and |dy| (move toward x;
+ *     jump/up when the target is above; move down when below); hold them briefly.
+ *   - Terminate when the interaction fires for real: the target entity is GONE
+ *     (consumed/collected), OR true 2D overlap, OR the observed field is already
+ *     satisfied (the win actually happened) — checked by the caller's compare.
+ *
+ * Anti-reward-hack: it issues ONLY real key input and reads ONLY observable state
+ * to decide direction; it NEVER writes the observed field / status. If the target
+ * can't be reached in budget, it still returns ok:true — the caller reads the
+ * real state and the comparator FAILS honestly (the unwinnable-level signal).
+ *
+ * It returns ok:false ONLY when the target cannot be resolved on __GAME__ at all
+ * (the event names an entity that does not exist — a real authoring error).
+ */
+async function driveEvent(
+  page: Page,
+  target: string | undefined,
+  ctx: GddContext,
+): Promise<DriveResult> {
+  if (!target) {
+    return { ok: false, message: `event input missing 'target'` };
+  }
+  const baseRef = parseEventTargetRef(target);
+  const candidateRefs = resolveTargetRefs(baseRef, ctx);
+  const keys = deriveMovementKeys(ctx.controls);
+
   await focusCanvas(page);
-  await page.keyboard.down(dirKey);
-  await page
-    .waitForFunction(
-      (ref) => {
-        const game = (window as any).__GAME__;
-        if (!game || !game.player) return false;
-        const ent = Array.isArray(game.entities)
-          ? game.entities.find((e: any) => e && (e.id === ref || e.type === ref))
+
+  // We can only DRIVE if there is a player to drive (no player = a real boot/
+  // contract gap → honest input error). A target that is not currently present
+  // is NOT an error here — it is left to the comparator: an absent goal means
+  // the win never fires and the assertion FAILS honestly (the unwinnable-level
+  // signal), it is never reported as "unsupported".
+  const located = await locateState(page, candidateRefs);
+  if (!located || !located.hasPlayer) {
+    return {
+      ok: false,
+      message: `event target '${baseRef}': no player on __GAME__ to drive toward it`,
+    };
+  }
+
+  const deadline = Date.now() + DRIVE_BUDGET_MS;
+  let pressedHoriz: string | null = null;
+
+  try {
+    for (let step = 0; step < DRIVE_MAX_STEPS && Date.now() < deadline; step += 1) {
+      const s = await locateState(page, candidateRefs);
+      // Interaction fired for real: target consumed (gone) or true 2D overlap.
+      if (!s || s.reached) break;
+
+      const dx = s.tx - s.px;
+      const dy = s.ty - s.py;
+
+      // Horizontal: hold the documented key that reduces |dx|. Keep it held
+      // across steps (continuous walk); only flip when the sign of dx flips.
+      const wantHoriz: string | null =
+        Math.abs(dx) > DRIVE_OVERLAP_PX
+          ? (dx > 0 ? keys.right : keys.left) ?? null
           : null;
-        // Overlap proxy: target gone (collected) OR within ~32px.
-        if (!ent) return true;
-        return Math.abs(ent.x - game.player.x) < 32;
-      },
-      targetRef,
-      { timeout: SETTLE_CEILING_MS },
-    )
-    .catch(() => {});
-  await page.keyboard.up(dirKey);
-  return true;
+      if (wantHoriz !== pressedHoriz) {
+        if (pressedHoriz) await page.keyboard.up(pressedHoriz).catch(() => {});
+        if (wantHoriz) await page.keyboard.down(wantHoriz).catch(() => {});
+        pressedHoriz = wantHoriz;
+      }
+
+      // Vertical: a TAP per step (a jump is a discrete press, not a hold). Jump
+      // when the target is meaningfully ABOVE the player; move down when below.
+      if (dy < -DRIVE_OVERLAP_PX && keys.up) {
+        await page.keyboard.press(keys.up).catch(() => {});
+      } else if (dy > DRIVE_OVERLAP_PX && keys.down) {
+        await page.keyboard.press(keys.down).catch(() => {});
+      }
+
+      // A short real-input burst, then re-read (wait-on-state, bounded).
+      await page.waitForTimeout(DRIVE_STEP_MS);
+    }
+  } finally {
+    if (pressedHoriz) await page.keyboard.up(pressedHoriz).catch(() => {});
+  }
+
+  // Brief bounded settle so the engine's overlap/win callback latches before the
+  // caller's AFTER read (the win flips a frame or two after the overlap fires).
+  // This is a one-time post-interaction settle, not a per-step blind sleep.
+  await page.waitForTimeout(DRIVE_STEP_MS).catch(() => {});
+
+  // Always ok: the input was driven for real. Whether the interaction fired is
+  // decided by the caller reading the real observable (pass = it happened;
+  // fail = the target was unreachable within budget — the honest unwinnable
+  // signal). We never assert the outcome here.
+  return { ok: true };
+}
+
+/**
+ * Read the live player + target positions off __GAME__ in ONE page call.
+ * `reached` = the interaction has already fired for real (target consumed/gone,
+ * or true 2D overlap within DRIVE_OVERLAP_PX). Returns null if there is no
+ * player. Matching the target tolerates id OR type OR role (whichever W4 tagged).
+ */
+async function locateState(
+  page: Page,
+  refs: string[],
+): Promise<{
+  hasPlayer: boolean;
+  px: number;
+  py: number;
+  tx: number;
+  ty: number;
+  reached: boolean;
+} | null> {
+  return page.evaluate(
+    ([refList, overlapPx]) => {
+      const game = (window as any).__GAME__;
+      if (!game) return null;
+      const player = game.player;
+      if (!player) return { hasPlayer: false, px: 0, py: 0, tx: 0, ty: 0, reached: false };
+      const ents = Array.isArray(game.entities) ? game.entities : [];
+      const set = new Set(refList as string[]);
+      const ent = ents.find(
+        (e: any) => e && (set.has(e.id) || set.has(e.type)),
+      );
+      const px = Number(player.x) || 0;
+      const py = Number(player.y) || 0;
+      if (!ent) {
+        // Target gone → the interaction consumed it (collected/destroyed) = the
+        // real interaction fired. We only treat "gone" as reached if we have a
+        // player (a fresh boot with no entities returns hasPlayer:false above).
+        return { hasPlayer: true, px, py, tx: px, ty: py, reached: true };
+      }
+      const tx = Number(ent.x) || 0;
+      const ty = Number(ent.y) || 0;
+      const reached =
+        Math.abs(tx - px) <= (overlapPx as number) &&
+        Math.abs(ty - py) <= (overlapPx as number);
+      return { hasPlayer: true, px, py, tx, ty, reached };
+    },
+    [refs, DRIVE_OVERLAP_PX] as [string[], number],
+  );
 }
 
 /**
  * Execute ONE assertion end-to-end (grammar §2). Returns the per-assertion
  * result; the harness records it and (on fail/error) captures a screenshot.
+ * `ctx` carries the gdd entity + control tables so the `event`/win-path driver
+ * and `click` target resolution stay generic (resolve by role, derive movement
+ * keys from the documented controls). Defaults to empty (the keyPress/keyHold/
+ * none paths don't need it).
  */
 export async function executeAssertion(
   page: Page,
   assertion: GddAssertion,
+  ctx: GddContext = {},
 ): Promise<AssertionResult> {
   const parsed = parseComparator(assertion.expect);
   if (!parsed) {
@@ -282,7 +505,7 @@ export async function executeAssertion(
   }
 
   // 2.4 input (WHEN)
-  const inputErr = await fireInput(page, assertion.input);
+  const inputErr = await fireInput(page, assertion.input, ctx);
   if (inputErr) {
     return {
       id: assertion.id,

@@ -16,7 +16,12 @@ import { createServer, type Server } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { join, normalize, extname } from 'node:path';
 import { existsSync } from 'node:fs';
-import { executeAssertion, type GddAssertion, type AssertionResult } from './compile.js';
+import {
+  executeAssertion,
+  type GddAssertion,
+  type AssertionResult,
+  type GddContext,
+} from './compile.js';
 import { OBSERVE_INIT_SCRIPT } from './observe.js';
 import { formatPassed, formatFailed, formatBootFailed } from './marker.js';
 import { runAdvisoryVlm, type AdvisoryVlm } from './vlm.js';
@@ -284,11 +289,14 @@ export async function runMilestone(opts: {
   projectDir: string;
   milestoneId: string;
   assertions: GddAssertion[];
+  /** The gdd entity + control tables, for the generic event/win-path driver. */
+  context?: GddContext;
   greenOnEntry?: boolean;
 }): Promise<RunResult> {
   const startedAt = new Date().toISOString();
   const t0 = Date.now();
   const { projectDir, milestoneId, assertions } = opts;
+  const ctx: GddContext = opts.context ?? {};
   const greenOnEntry = opts.greenOnEntry ?? true;
 
   const distDir = resolveDistDir(projectDir);
@@ -331,7 +339,7 @@ export async function runMilestone(opts: {
 
     // ── run every assertion (single-aggregate, NOT fail-fast) ──────────────
     for (const assertion of assertions) {
-      let result = await executeAssertion(state.page, assertion);
+      let result = await executeAssertion(state.page, assertion, ctx);
       // Screenshot on each failure/error (grammar §2.7).
       if (result.status !== 'pass') {
         const shot = join('verify', `${assertion.id}-fail.png`);

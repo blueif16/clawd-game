@@ -15,7 +15,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { runMilestone } from '../src/harness.js';
 import { formatBootFailed } from '../src/marker.js';
-import type { GddAssertion } from '../src/compile.js';
+import type { GddAssertion, GddEntity, GddControl } from '../src/compile.js';
 
 interface GddMilestone {
   id: string;
@@ -24,6 +24,8 @@ interface GddMilestone {
   assertions: GddAssertion[];
 }
 interface Gdd {
+  entities?: GddEntity[];
+  controls?: GddControl[];
   milestones: GddMilestone[];
 }
 
@@ -88,6 +90,13 @@ async function main(): Promise<void> {
       projectDir,
       milestoneId,
       assertions: milestone.assertions,
+      // The gdd entity + control tables let the generic event/win-path driver
+      // resolve the target by role and derive movement from the documented
+      // controls — no per-game logic, no genre constants.
+      context: {
+        entities: Array.isArray(gdd.entities) ? gdd.entities : undefined,
+        controls: Array.isArray(gdd.controls) ? gdd.controls : undefined,
+      },
     });
 
     // Print the verbatim marker (the gate the orchestrator parses).
