@@ -98,7 +98,9 @@ game-omni.js. Each skill cites its provenance inline (repo path or URL) — no r
    below.) Remaining done-criterion: the recorded platformer proof (a green M1 + a deliberately-broken FAILED).
 The skill system + orchestration are complete; these are the product-code builds the skills are specced against.
 
-## Diagnostics log (product-quality edits only; append one line each: date — owner — rule — commit)
+## Diagnostics log (product-quality edits only; append one line each: date — owner — rule — commit — supporting doc(s))
+_Every entry CITES its supporting doc (research brief / handoff / findings) and we COMMIT that doc — so a future
+session can retrace the evidence behind any edit. A claim with no doc on disk is not yet grounded; record it._
 - 2026-06-08 — system — Built the W0–W5 skill system + `game-omni.js` orchestrator, one research-grounded
   sub-agent per node, emergent artifact contracts (no commit yet — repo is not under git).
 - 2026-06-08 — `scaffold/SKILL.md` — Building the Phase-1 platformer template revealed the template ships as
@@ -134,6 +136,37 @@ The skill system + orchestration are complete; these are the product-code builds
   (nothing to corrupt); + preamble hardening (`cd` into an absolute project dir once, operate relative).
   Evidence: `out/plat1/_pi/w2-scaffold.{events.jsonl,prompt.md}`, `out-game/` vs `out/game/spec/`.
   Human decision: let the run finish, no re-run yet.
+  — UPDATE 2026-06-09: the **false-green half is now closed** by the generic post-condition guard
+  (next log entry): a path-drifted / empty-output node halts `blocked` instead of silently `ok`.
+  The slash-free `projectDir` + per-game-folders + catalog `index.json` half of A1 remains OPEN.
+- 2026-06-09 — `pi-runner/{run,extract}.mjs` (generic engine) + `game-omni.js` (chain) — GENERIC node
+  POST-CONDITION GUARD, killing the silent false-green class `plat1` surfaced. The chain now DECLARES
+  each node's on-disk contract as data (`agent()` opts `produces:[projectDir-relative files]` /
+  `mutates:'<subdir>'`); the driver ENFORCES it after every node — a reported artifact OUTSIDE the
+  projectDir, a declared `produces` file missing/empty, or a `mutates` dir left byte-for-byte unchanged
+  ⇒ node `blocked` (loud halt), never `ok`. Declared W0–W3 (`produces`) + W4 (`mutates:'src'`); no-ops
+  when a node doesn't opt in or no projectDir is passed (legacy behavior + engine game-agnosticism
+  preserved). Would have caught ALL three plat1 failures: W4 wrote 0 files yet went ok; W2 never wrote
+  STRUCTURE.md; W3 wrote to corrupted `out-game/`. De-hardcoded: engine checks on-disk EFFECTS, the
+  chain owns the per-node truth — no game/genre knowledge anywhere. Verify: `node --check` + `extract.mjs`
+  still 10 stages; empirical proof deferred to the NEXT fresh-prompt run (never a plat1 rerun — avoids
+  overfitting the fix to one game). Partially lands A1's "chain guard". Proven: `pi-runner/guard.test.mjs` (6/6).
+  (commit: `3e94d7e` · skillsys(game-omni); doc: `docs/handoff-fix-pipeline-findings.md` §A1–A4 — the findings.)
+- 2026-06-09 — `write-gdd/SKILL.md` (+ companion `implement-milestone/SKILL.md`) — **Bucket 3 (the quality
+  break): no node DESIGNED for "can a real player play+win this".** plat1 shipped a level whose platforms
+  exceeded the jump arc and whose goal needed no jumping, yet PASSED — assertions checked mechanics in
+  ISOLATION (`x increases on Right`), never a win-path. Research-grounded fix (our research first, then
+  multi-source): W1 gains §3.5 "Design the PLAYABLE SPACE" (win-path reachability · legibility · onboarding)
+  and §5 REQUIRES a final-milestone reachability assertion (fire documented `controls[]` → assert the win
+  observable); W4 builds the reachable/legible space. De-hardcoded: the relation "objective reachable via the
+  documented verb", mapped per archetype to observables already in the grammar
+  (`status`/`moveCount`/`lives`/`enemyHP`) — zero genre constants, NO schema change. Anti-reward-hack:
+  STRENGTHENS the observable oracle (an un-fakeable win-path), oracle stays immutable. PREREQUISITE: paired
+  with **A4** (the verify harness must actually DRIVE the documented controls to the goal — plat1's M3-A1
+  errored "not drivable by natural input"; else we trade false-green for false-error). doc:
+  `docs/bucket3-playability-research.md` (full brief + cited sources: Sturgeon-MKIII reachability /
+  gamedeveloper legibility / GMTK + Level-Design-Book onboarding). (commit: pending — W1/W4 skill edit + A4
+  harness in progress via sub-agents.)
 - _(future flaws/fixes append here so repeat-flaws become visible and the next diagnosis starts ahead.)_
 
 ## Stewardship note
