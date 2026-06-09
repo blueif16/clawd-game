@@ -83,5 +83,6 @@
       "type": "number",
       "description": "Default enemy contact damage"
     }
-  }
+  },
+  "controlsHelp": []
 }

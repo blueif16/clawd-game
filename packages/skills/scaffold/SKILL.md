@@ -27,7 +27,7 @@ contract, not your chat output.
 Your job has exactly six parts, in this order:
 1. **Absorb** `spec/gdd.json` — archetype, config, entities, assetList, controls are your inputs.
 2. **Merge** the template into the project: copy shared `templates/core/`, then overlay `templates/modules/<archetype>/` on top (module wins) — the empty starter. (§2)
-3. **Merge** `gdd.config` into `gameConfig.json` (flat → `{value:X}`, correct sub-object; infra untouchable).
+3. **Merge** `gdd.config` into `gameConfig.json` (flat → `{value:X}`, correct sub-object; infra untouchable) + copy `gdd.controls[]` into `gameConfig.controlsHelp` (the on-screen "how to play").
 4. **Derive** `index.json` — every asset slot + dims from `assetList` ∪ `entities[].assetSlot`.
 5. **Write** `STRUCTURE.md` — the scenes/entities/systems/controls map (always in full).
 6. **Ensure** `window.__GAME__` is exposed per `template-contract.md`, then pass **BUILD-HEALTH** (`npm run build`).
@@ -62,7 +62,7 @@ Read `spec/gdd.json` (relative to the project dir). It validates against
 | `config` | **Flat tuning numbers → `gameConfig.json`** (§3). Merge, don't replace. |
 | `entities[]` | The entity→file map + behaviors in `STRUCTURE.md` (§5); `assetSlot` feeds `index.json` (§4). |
 | `assetList[]` | **The asset slots** → `index.json` rows (§4). Empty array is valid. |
-| `controls[]` | The input wiring table in `STRUCTURE.md` (§5). |
+| `controls[]` | The input wiring table in `STRUCTURE.md` (§5) **AND** the on-screen "how to play" — copied verbatim into `gameConfig.controlsHelp` so the running game can render the controls (§3.1). |
 | `mechanics[]` / `winCondition` / `loseCondition` / `milestones[]` | Context for `STRUCTURE.md`'s event map; you do NOT implement them (that's W4). |
 
 You do NOT design anything new. Everything you scaffold traces to a GDD field. If a GDD field
@@ -133,6 +133,26 @@ The GDD gives flat `config:{ key:number }`. The template's `gameConfig.json` wra
 5. **A key not in the archetype's schema → DROP it**, and record
    `"dropped config key '<k>' (not in <archetype> gameConfig schema)"` in `STRUCTURE.md` (Notes) and
    `MEMORY.md`. **Never invent a new `gameConfig` field.** _([repo] generate-gdd "do not invent".)_
+
+### 3.1 Carry `gdd.controls` into the runtime as `gameConfig.controlsHelp` (the on-screen "how to play")
+
+> The running game bundles ONLY `src/gameConfig.json` — it does NOT import `spec/gdd.json`. So the
+> documented controls must ride into the build through `gameConfig.json`, or a first-time player has
+> no way to learn the inputs. The template's `TitleScreen` renders a generic "HOW TO PLAY" panel from
+> this group; if it is empty/absent it renders nothing. _(P4: playtester "couldn't understand how to
+> play" — the GDD declared the controls but they never surfaced in the game.)_
+
+After the config merge above, also populate the `controlsHelp` group (it already exists in every
+template `gameConfig.json` as `[]`):
+1. Set `gameConfig.controlsHelp` = a **copy of `gdd.controls[]`** — each entry **`{ "input": <string>,
+   "action": <string> }`** (the exact GDD `controls[]` shape; a plain ARRAY, NOT the
+   `{value,type,description}` wrapper — it is a list, not a tuning number). Generic across archetypes:
+   copy WHATEVER controls W1 declared (platformer arrows/jump, top_down WASD, grid moves, TD placement,
+   ui_heavy clicks) verbatim — **never hard-code one game's keys**.
+2. **Empty/absent `gdd.controls`** → leave `controlsHelp` as `[]` (the template renders nothing,
+   gracefully). Do not invent controls.
+3. This is the ONE new `gameConfig` group W2 adds; it is NOT a `screenSize`/`debugConfig`/`renderConfig`
+   infra group and does not feed engine params — it is the player-facing controls hint only.
 
 Write the merged `gameConfig.json` back. Validate it is still valid JSON.
 
@@ -285,7 +305,7 @@ Run **`npm run build`** in the project dir. It must succeed (`tsc --noEmit && vi
 
 Relative to the project dir:
 - The **copied project** (template module + core shell) — empty, building.
-- **`src/gameConfig.json`** — merged (`gdd.config` wrapped into the archetype sub-object; infra untouched).
+- **`src/gameConfig.json`** — merged (`gdd.config` wrapped into the archetype sub-object; infra untouched) + `controlsHelp` populated from `gdd.controls[]` so the TitleScreen can render the on-screen "how to play" (§3.1).
 - **`index.json`** (project root) — the asset slot manifest (valid against `index.schema.json`).
 - **`STRUCTURE.md`** (project root) — the architecture map, written in full.
 - **`src/main.ts`** — verified/ensured `window.__GAME__` per `template-contract.md` §3 (seam only).

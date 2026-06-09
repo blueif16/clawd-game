@@ -19,7 +19,7 @@ templates/
     src/
       main.ts               #   bootstrap + installs window.__GAME__  (KEEP seam)
       hook.ts               #   the window.__GAME__ adapter (KEEP — §3)  ← net-new
-      gameConfig.json       #   universal groups only (screenSize/debug/render)
+      gameConfig.json       #   universal groups (screenSize/debug/render + controlsHelp[])
       LevelManager.ts       #   LEVEL_ORDER + navigation (W4 fills LEVEL_ORDER)
       utils.ts              #   placeholder-fill + score/registry helpers (KEEP)
       scenes/

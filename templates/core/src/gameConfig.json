@@ -24,5 +24,6 @@
       "type": "boolean",
       "description": "Enable pixel-art (nearest-neighbour) rendering"
     }
-  }
+  },
+  "controlsHelp": []
 }

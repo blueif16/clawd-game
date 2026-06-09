@@ -150,6 +150,9 @@ Every value is wrapped: `{ "value": X, "type": "number|boolean|string|array", "d
 - `debugConfig` → `debug` (+ archetype debug flags)
 - `renderConfig` → `pixelArt`
 
+**One UNIVERSAL player-facing group every template has (W2 POPULATES it from `gdd.controls[]`):**
+- `controlsHelp` → a plain ARRAY of `{ "input": string, "action": string }` (NOT the `{value,…}` wrapper — it is a list, not a tuning number). Ships as `[]`; W2 fills it with a verbatim copy of `gdd.controls[]` (SKILL §3.1). The template's `TitleScreen` renders a generic "HOW TO PLAY" panel from it (archetype-agnostic); empty/absent → renders nothing. This carries the documented controls into the runtime, which bundles `gameConfig.json` but NOT `spec/gdd.json`.
+
 **The per-archetype game-specific sub-object (where W2 merges `gdd.config`):**
 
 | archetype | sub-object | keys W1 may set (flat → wrapped here) |

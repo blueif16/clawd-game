@@ -90,5 +90,6 @@
       "type": "number",
       "description": "Ultimate skill damage"
     }
-  }
+  },
+  "controlsHelp": []
 }
