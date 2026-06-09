@@ -98,7 +98,7 @@ Do exactly three things, then stop:
 3. Write an explicit scopeCut (4-8 items) of what is deliberately OUT — the anti-slop guardrail. Cut anything not serving the core loop and the standard over-scope traps; NEVER cut game-feel/juice.
 
 Write exactly one file: ${PROJECT}/spec/classification.json (create ${PROJECT}/spec/ if needed), valid against packages/skills/classify-game/classification.schema.json. Then return the same object as your structured result. On a prompt that fits no archetype, pick the closest, set confidence:"low", and explain in reasoning; default to platformer for empty/gibberish. Classify deterministically (low temperature).`),
-  { label: 'W0 classify', phase: 'W0 Classify', schema: CLASSIFICATION_SCHEMA }
+  { label: 'W0 classify', phase: 'W0 Classify', schema: CLASSIFICATION_SCHEMA, produces: ['spec/classification.json'] }
 )
 
 // ----------------------------------------------------------------------------
@@ -256,7 +256,7 @@ const w1 = await agent(
 Design the slim Game Design Doc CONSTRAINED to the chosen archetype template's capabilities, and decompose classification.coreLoop into 2-5 PLAYABLE milestones (default 3): M1 = the core loop plays at all; the final milestone includes a win and/or lose end-state. For each milestone write acceptance criteria + executable runtime assertions (Given setup -> When input -> Then observe+expect) over the live game object window.__GAME__, 1:1 with the criteria, asserting OBSERVABLE behavior never implementation. Respect classification.scopeCut as a hard boundary; never invent a capability the template lacks; never cut the juice.
 
 Write exactly two files under ${PROJECT}/spec/, valid against packages/skills/write-gdd/gdd.schema.json: gdd.json and PLAN.md. Then return the gdd.json object as your structured result and stop.`),
-  { label: 'W1 spec', phase: 'W1 Spec', schema: GDD_SCHEMA }
+  { label: 'W1 spec', phase: 'W1 Spec', schema: GDD_SCHEMA, produces: ['spec/gdd.json', 'spec/PLAN.md'] }
 )
 
 // ----------------------------------------------------------------------------
@@ -294,7 +294,7 @@ const w2 = await agent(
 5. Ensure ${PROJECT}/src/main.ts exposes window.__GAME__ per template-contract.md (ready/status/scene/player/score/entities + archetype extras + snapshot()/commands). If absent, add the thin read-only adapter (IDs+primitives, never raw Phaser objects; status normalized; score from registry).
 6. Run \`npm run build\` in ${PROJECT}. It MUST exit 0. Fix only scaffold-level breakage; do NOT tighten tsconfig. If it cannot be made green, record the error in MEMORY.md and return status:"failed" — NEVER report success on a red build.
 Do not implement game logic, levels, or assets. Return the status receipt.`),
-  { label: 'W2 scaffold', phase: 'W2 Scaffold', schema: SCAFFOLD_RESULT_SCHEMA }
+  { label: 'W2 scaffold', phase: 'W2 Scaffold', schema: SCAFFOLD_RESULT_SCHEMA, produces: ['STRUCTURE.md', 'index.json'] }
 )
 
 // ----------------------------------------------------------------------------
@@ -332,7 +332,7 @@ Mode = placeholder by DEFAULT. Use gemini ONLY if mode:gemini was requested AND 
 For EVERY slot in index.json.slots[]: produce a correctly-dimensioned file under ${PROJECT}/public/assets/ (sprites/images/tiles/backgrounds/audio by type) per the skill. Placeholder = legible greybox (deterministic color + label + dims, transparent where the type needs it). Gemini = gemini-2.5-flash-image via raw REST with the type+archetype-conditioned prompt, magenta chroma-key + sharp trim/contain-resize for sprites, pixel-snap if pixelArt, style-anchored to the first sprite; degrade any failed slot to a placeholder. NEVER block on audio (placeholder WAV).
 
 Then: (a) write back ONLY each filled slot's path+status into ${PROJECT}/index.json (keys/order untouched, one atomic rewrite, re-validate against packages/skills/scaffold/index.schema.json); (b) write ${PROJECT}/ASSETS.md in full per the skill (valid against packages/skills/assets/assets.schema.json); (c) append quirks/degradation to ${PROJECT}/MEMORY.md. Do NOT write src/**, spec/**, tilemap JSON, or any new slot/key. Empty slots:[] -> write ASSETS.md note and stop. Return the status receipt.`),
-  { label: 'W3 assets', phase: 'W3 Assets', schema: ASSETS_RESULT_SCHEMA }
+  { label: 'W3 assets', phase: 'W3 Assets', schema: ASSETS_RESULT_SCHEMA, produces: ['ASSETS.md'] }
 )
 
 // ----------------------------------------------------------------------------
@@ -394,7 +394,7 @@ POPULATE window.__GAME__ FROM REAL STATE per the contract: score via game.regist
 BUILD-HEALTH: run npm run build in ${PROJECT}; on failure fix the ROOT CAUSE (use the known-failure->fix table in the skill); re-build; bounded ~5 attempts; never delete/stub template files or loosen tsconfig. If it cannot go green with a scoped fix, record the error in MEMORY.md and return status:"failed".
 
 Tick the completed TODO-W4 in STRUCTURE.md and append terse quirks to MEMORY.md. Implement exactly ${mid}, build, stop. Do NOT implement other milestones or chase W5 assertion pass/fail. Return the status receipt.`),
-    { label: `W4 implement ${mid}`, phase: 'W4 Implement', schema: IMPLEMENT_RESULT_SCHEMA }
+    { label: `W4 implement ${mid}`, phase: 'W4 Implement', schema: IMPLEMENT_RESULT_SCHEMA, mutates: 'src' }
   )
 
   phase('W5 Verify+Fix')

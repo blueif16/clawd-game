@@ -44,6 +44,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { extractWorkflow } from "./extract.mjs";
+import { dirSig, assessProduction } from "./guard.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url)); // pi-runner/ lives here
 
@@ -137,6 +138,11 @@ function artifactState(p) {
   catch { return { path: p, exists: false, bytes: 0 }; }
 }
 
+// The project dir this run was handed (--arg projectDir=...). The post-condition guard
+// (./guard.mjs) anchors every node's DECLARED on-disk effects to here. Null when no projectDir
+// was given → the guard no-ops (nothing to anchor to; legacy behavior preserved).
+const PROJECT = args.wfArgs.projectDir ? abs(String(args.wfArgs.projectDir)) : null;
+
 // pi has no schema-forced return, so each node ends with a fenced JSON block the driver parses;
 // the driver ALSO stat()s the reported artifacts on disk (verified, not trusted).
 function returnProtocol(label) {
@@ -221,6 +227,9 @@ async function runNode(node) {
   n.status = "running";
   n.startedAt = nowISO();
   const t0 = Date.now();
+  // Snapshot the dir this node DECLARES it mutates (node.mutates) BEFORE pi runs, so we can later
+  // prove it did work (vs. a model that only read/built and wrote no source). Null unless opted in.
+  const srcSigBefore = (PROJECT && node.mutates) ? dirSig(path.join(PROJECT, node.mutates)) : null;
   writeStatus();
 
   ensureDir(promptDir);
@@ -372,10 +381,23 @@ async function runNode(node) {
       // self-reported status — forcing "blocked" on every zero-artifact node wrongly fails
       // legitimate gates (e.g. a mid-chain-resume preflight that only verifies upstream files).
       const declaredMissing = n.artifacts.length > 0 && !n.artifacts.every((a) => a.exists);
+      // ── GENERIC post-condition guard (workflow DECLARES via produces/mutates, driver ENFORCES) ──
+      // Cures the silent false-green: a node self-reporting ok while it wrote nothing, or to the
+      // WRONG dir. No-ops unless the workflow opted the node in AND a projectDir was given. See guard.mjs.
+      const { outsideProject, requiredMissing, noMutation } = assessProduction({
+        absProject: PROJECT,
+        artifactsAbs: n.artifacts.map((a) => ({ path: a.path, abs: abs(a.path) })),
+        produces: Array.isArray(node.produces) ? node.produces : [],
+        mutatesAbs: (PROJECT && node.mutates) ? path.join(PROJECT, node.mutates) : null,
+        srcSigBefore,
+      });
       let st;
       if (n.killedTimeout || n.killedRepeat || code !== 0) st = "error";
       else if (parsed && parsed.status && parsed.status !== "ok") st = parsed.status; // gap/blocked self-report honored
       else if (declaredMissing) st = "blocked"; // ok claimed but a REPORTED file is missing (measure, don't trust)
+      else if (outsideProject.length) st = "blocked"; // wrote an artifact OUTSIDE the project dir (path drift)
+      else if (requiredMissing.length) st = "blocked"; // a DECLARED output is missing/empty under the project
+      else if (noMutation) st = "blocked"; // declared it mutates a dir but left it byte-for-byte unchanged
       else st = "ok";
       n.status = st;
       n.exitCode = code;
@@ -390,6 +412,19 @@ async function runNode(node) {
       n.issues = (parsed && parsed.issues) || [];
       n.pipelineFindings = (parsed && parsed.pipelineFindings) || [];
       if (!parsed) (n.issues = n.issues || []).push("no return JSON block parsed from pi output");
+      if (outsideProject.length) n.issues.push(`guard: wrote artifact(s) OUTSIDE projectDir (path drift) — ${outsideProject.join(", ")}; expected under ${args.wfArgs.projectDir}`);
+      if (requiredMissing.length) n.issues.push(`guard: DECLARED output(s) missing/empty under ${args.wfArgs.projectDir} — ${requiredMissing.join(", ")}`);
+      if (noMutation) n.issues.push(`guard: declared mutates:"${node.mutates}" but left it byte-for-byte unchanged — node did no work`);
+      // Per-stage PRODUCTION record (clear logging): what this stage was MEANT to produce vs what
+      // landed — so run-status.json answers "what did the main stages produce?" at a glance.
+      n.outputs = {
+        declared: Array.isArray(node.produces) ? node.produces : [],
+        reported: n.artifacts.map((a) => a.path),
+        missing: requiredMissing,
+        outsideProject,
+        mutates: node.mutates || null,
+        mutated: node.mutates ? !noMutation : null,
+      };
       if (stderr.trim()) n.stderrTail = stderr.trim().slice(-500);
       n.endedAt = nowISO();
       n.durationMs = Date.now() - t0;
@@ -399,6 +434,12 @@ async function runNode(node) {
       const tokK = tokens.billable > 999 ? `${(tokens.billable / 1000).toFixed(1)}k` : `${tokens.billable}`;
       const thinkK = thinkingChars > 999 ? `${(thinkingChars / 1000).toFixed(1)}k` : `${thinkingChars}`;
       console.log(`    ${mark} ${node.label} → ${st}  (${(n.durationMs / 1000).toFixed(1)}s · tools=${toolCalls} · think=${thinkK} · tok=${tokK}) — ${(n.summary || "").split("\n")[0].slice(0, 100)}`);
+      // Clear per-stage production line: declared→landed, or the mutate verdict, plus any drift.
+      const o = n.outputs;
+      const prod = o.declared.length ? `produced ${o.declared.length - o.missing.length}/${o.declared.length} declared`
+        : o.mutates ? (o.mutated ? `mutated ${o.mutates}/` : `NO-OP: ${o.mutates}/ unchanged`)
+        : `reported ${o.reported.length} artifact(s)`;
+      console.log(`        ⤷ ${prod}${o.missing.length ? `  · MISSING: ${o.missing.join(", ")}` : ""}${o.outsideProject.length ? `  · OUTSIDE projectDir: ${o.outsideProject.join(", ")}` : ""}`);
       resolve(n);
     });
   });
