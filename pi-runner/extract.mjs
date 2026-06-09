@@ -48,12 +48,6 @@ export async function extractWorkflow(workflowPath, args = {}) {
       agentType: opts.agentType || null,
       group: curGroup,
       hasSchema: !!opts.schema,
-      // GENERIC post-condition metadata (optional): the on-disk effects a node MUST have when it
-      // claims success — `produces` = project-relative files it must write (non-empty); `mutates`
-      // = a project sub-dir it must change. The driver enforces these so a node that self-reports
-      // ok while writing nothing / to the wrong place becomes a loud failure, not a silent green.
-      produces: Array.isArray(opts.produces) ? opts.produces : null,
-      mutates: typeof opts.mutates === "string" ? opts.mutates : null,
       prompt: Array.isArray(prompt) ? prompt.join("\n") : String(prompt),
     });
     return GENERIC;

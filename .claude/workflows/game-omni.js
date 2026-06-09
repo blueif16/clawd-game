@@ -46,8 +46,20 @@ const PREAMBLE = `You are ONE node in the game-omni generation pipeline. Non-neg
 - GENERALIZE. Behave correctly for ANY game prompt — never hard-code the specific game in front of you.
 - STAY IN YOUR LANE. Do only this node's job and then stop; downstream nodes do theirs.`
 
-function nodePrompt(skillPath, body) {
-  return `${PREAMBLE}\n\nSKILL TO LOAD AND FOLLOW: ${skillPath}\n\n${body}`
+function nodePrompt(skillPath, body, contractStr = '') { return `${PREAMBLE}\n\nSKILL TO LOAD AND FOLLOW: ${skillPath}\n\n${body}${contractStr ? '\n\n' + contractStr : ''}` }
+
+// The 4th contract layer (artifact contract) — ONE declaration renders the Definition-of-Done
+// prose (the model reads) AND the DRIVER-ARTIFACTS/DRIVER-OWNS markers (pi-runner/run.mjs parses,
+// verified independent of the self-report). Paths are PROJECT-relative; the driver resolves them
+// forgivingly. Spec: ~/.claude/skills/transform-workflow-to-pi/reference/artifact-contract.md.
+function contract({ artifacts = [], owns = [], note = '' }) {
+  const abs = (p) => `${PROJECT}/${p}`
+  return [
+    'OUTPUT CONTRACT — you are DONE only when EVERY file below exists and is non-empty at EXACTLY its path. Write NOTHING outside the owned paths. If you cannot, set status="blocked" and say why — do NOT exit clean (an empty or wrong-path artifact set is a FAILURE, not an ok).',
+    artifacts.length ? `DRIVER-ARTIFACTS: ${artifacts.map(abs).join(' ')}` : '',
+    `DRIVER-OWNS: ${(owns.length ? owns : artifacts).map(abs).join(' ')}`,
+    note ? `OWNED-PATH NOTE: ${note}` : '',
+  ].filter(Boolean).join('\n')
 }
 
 // ----------------------------------------------------------------------------
@@ -97,8 +109,9 @@ Do exactly three things, then stop:
 2. Write the one-line core loop (player verb + goal + obstacle + fail; self-enclosed) and the single coreVerb.
 3. Write an explicit scopeCut (4-8 items) of what is deliberately OUT — the anti-slop guardrail. Cut anything not serving the core loop and the standard over-scope traps; NEVER cut game-feel/juice.
 
-Write exactly one file: ${PROJECT}/spec/classification.json (create ${PROJECT}/spec/ if needed), valid against packages/skills/classify-game/classification.schema.json. Then return the same object as your structured result. On a prompt that fits no archetype, pick the closest, set confidence:"low", and explain in reasoning; default to platformer for empty/gibberish. Classify deterministically (low temperature).`),
-  { label: 'W0 classify', phase: 'W0 Classify', schema: CLASSIFICATION_SCHEMA, produces: ['spec/classification.json'] }
+Write exactly one file: ${PROJECT}/spec/classification.json (create ${PROJECT}/spec/ if needed), valid against packages/skills/classify-game/classification.schema.json. Then return the same object as your structured result. On a prompt that fits no archetype, pick the closest, set confidence:"low", and explain in reasoning; default to platformer for empty/gibberish. Classify deterministically (low temperature).`,
+    contract({ artifacts: ['spec/classification.json'], owns: ['spec/**'] })),
+  { label: 'W0 classify', phase: 'W0 Classify', schema: CLASSIFICATION_SCHEMA }
 )
 
 // ----------------------------------------------------------------------------
@@ -255,8 +268,9 @@ const w1 = await agent(
 
 Design the slim Game Design Doc CONSTRAINED to the chosen archetype template's capabilities, and decompose classification.coreLoop into 2-5 PLAYABLE milestones (default 3): M1 = the core loop plays at all; the final milestone includes a win and/or lose end-state. For each milestone write acceptance criteria + executable runtime assertions (Given setup -> When input -> Then observe+expect) over the live game object window.__GAME__, 1:1 with the criteria, asserting OBSERVABLE behavior never implementation. Respect classification.scopeCut as a hard boundary; never invent a capability the template lacks; never cut the juice.
 
-Write exactly two files under ${PROJECT}/spec/, valid against packages/skills/write-gdd/gdd.schema.json: gdd.json and PLAN.md. Then return the gdd.json object as your structured result and stop.`),
-  { label: 'W1 spec', phase: 'W1 Spec', schema: GDD_SCHEMA, produces: ['spec/gdd.json', 'spec/PLAN.md'] }
+Write exactly two files under ${PROJECT}/spec/, valid against packages/skills/write-gdd/gdd.schema.json: gdd.json and PLAN.md. Then return the gdd.json object as your structured result and stop.`,
+    contract({ artifacts: ['spec/gdd.json', 'spec/PLAN.md'], owns: ['spec/**'] })),
+  { label: 'W1 spec', phase: 'W1 Spec', schema: GDD_SCHEMA }
 )
 
 // ----------------------------------------------------------------------------
@@ -293,8 +307,9 @@ const w2 = await agent(
 4. Write ${PROJECT}/STRUCTURE.md IN FULL per the skill: Controls, Scenes, Entities(file/extends/behaviors/assetSlot), Systems, State/Event map, Test hook, Assets(->index.json), Build, Notes. Mark W4 work as TODO-W4:.
 5. Ensure ${PROJECT}/src/main.ts exposes window.__GAME__ per template-contract.md (ready/status/scene/player/score/entities + archetype extras + snapshot()/commands). If absent, add the thin read-only adapter (IDs+primitives, never raw Phaser objects; status normalized; score from registry).
 6. Run \`npm run build\` in ${PROJECT}. It MUST exit 0. Fix only scaffold-level breakage; do NOT tighten tsconfig. If it cannot be made green, record the error in MEMORY.md and return status:"failed" — NEVER report success on a red build.
-Do not implement game logic, levels, or assets. Return the status receipt.`),
-  { label: 'W2 scaffold', phase: 'W2 Scaffold', schema: SCAFFOLD_RESULT_SCHEMA, produces: ['STRUCTURE.md', 'index.json'] }
+Do not implement game logic, levels, or assets. Return the status receipt.`,
+    contract({ artifacts: ['STRUCTURE.md', 'index.json'], owns: ['**'], note: 'W2 scaffolds the whole project under the project dir; it owns everything UNDER it but must write nothing OUTSIDE it.' })),
+  { label: 'W2 scaffold', phase: 'W2 Scaffold', schema: SCAFFOLD_RESULT_SCHEMA }
 )
 
 // ----------------------------------------------------------------------------
@@ -331,8 +346,9 @@ Mode = placeholder by DEFAULT. Use gemini ONLY if mode:gemini was requested AND 
 
 For EVERY slot in index.json.slots[]: produce a correctly-dimensioned file under ${PROJECT}/public/assets/ (sprites/images/tiles/backgrounds/audio by type) per the skill. Placeholder = legible greybox (deterministic color + label + dims, transparent where the type needs it). Gemini = gemini-2.5-flash-image via raw REST with the type+archetype-conditioned prompt, magenta chroma-key + sharp trim/contain-resize for sprites, pixel-snap if pixelArt, style-anchored to the first sprite; degrade any failed slot to a placeholder. NEVER block on audio (placeholder WAV).
 
-Then: (a) write back ONLY each filled slot's path+status into ${PROJECT}/index.json (keys/order untouched, one atomic rewrite, re-validate against packages/skills/scaffold/index.schema.json); (b) write ${PROJECT}/ASSETS.md in full per the skill (valid against packages/skills/assets/assets.schema.json); (c) append quirks/degradation to ${PROJECT}/MEMORY.md. Do NOT write src/**, spec/**, tilemap JSON, or any new slot/key. Empty slots:[] -> write ASSETS.md note and stop. Return the status receipt.`),
-  { label: 'W3 assets', phase: 'W3 Assets', schema: ASSETS_RESULT_SCHEMA, produces: ['ASSETS.md'] }
+Then: (a) write back ONLY each filled slot's path+status into ${PROJECT}/index.json (keys/order untouched, one atomic rewrite, re-validate against packages/skills/scaffold/index.schema.json); (b) write ${PROJECT}/ASSETS.md in full per the skill (valid against packages/skills/assets/assets.schema.json); (c) append quirks/degradation to ${PROJECT}/MEMORY.md. Do NOT write src/**, spec/**, tilemap JSON, or any new slot/key. Empty slots:[] -> write ASSETS.md note and stop. Return the status receipt.`,
+    contract({ artifacts: ['ASSETS.md'], owns: ['public/assets/**', 'ASSETS.md', 'index.json', 'MEMORY.md'] })),
+  { label: 'W3 assets', phase: 'W3 Assets', schema: ASSETS_RESULT_SCHEMA }
 )
 
 // ----------------------------------------------------------------------------
@@ -393,8 +409,9 @@ POPULATE window.__GAME__ FROM REAL STATE per the contract: score via game.regist
 
 BUILD-HEALTH: run npm run build in ${PROJECT}; on failure fix the ROOT CAUSE (use the known-failure->fix table in the skill); re-build; bounded ~5 attempts; never delete/stub template files or loosen tsconfig. If it cannot go green with a scoped fix, record the error in MEMORY.md and return status:"failed".
 
-Tick the completed TODO-W4 in STRUCTURE.md and append terse quirks to MEMORY.md. Implement exactly ${mid}, build, stop. Do NOT implement other milestones or chase W5 assertion pass/fail. Return the status receipt.`),
-    { label: `W4 implement ${mid}`, phase: 'W4 Implement', schema: IMPLEMENT_RESULT_SCHEMA, mutates: 'src' }
+Tick the completed TODO-W4 in STRUCTURE.md and append terse quirks to MEMORY.md. Implement exactly ${mid}, build, stop. Do NOT implement other milestones or chase W5 assertion pass/fail. Return the status receipt.`,
+      contract({ artifacts: [], owns: ['src/**', 'STRUCTURE.md', 'MEMORY.md'], note: 'W4 has no fixed required filename (game-specific scenes); DRIVER-OWNS only — the wrote-nothing hard-catch is the per-stage-commit roadmap.' })),
+    { label: `W4 implement ${mid}`, phase: 'W4 Implement', schema: IMPLEMENT_RESULT_SCHEMA }
   )
 
   phase('W5 Verify+Fix')
@@ -407,7 +424,8 @@ RUN THE PRE-BUILT VERIFY RUNNER (do NOT re-implement Playwright): the harness li
 
 On VALIDATION_FAILED run a BOUNDED <=3-cycle self-fix: feed yourself {failed describe + observed-vs-expected + console/pageerror + screenshot + MEMORY.md}; diagnose the REAL root cause; EDIT src/** GAME CODE ONLY (reuse the implement-milestone repair discipline); re-run npm run build; re-run the verify harness. STOP on all-pass / a repeated failure signature (stall) / 3 cycles; then re-emit the marker. ANTI-REWARD-HACK (absolute): NEVER edit spec/gdd.json, the assertions, the window.__GAME__ hook, or the verify harness to fake a pass; the oracle is immutable; make the REAL mechanic true. An honest VALIDATION_FAILED after the bound is the correct output.
 
-If you edited src/**, re-run prior milestones' assertions once (regression guard). The harness writes ${PROJECT}/verify/report.json (schema: packages/skills/verify/report.schema.json — per-assertion observed-vs-expected, the marker, screenshots, the advisory canvas-not-blank/VLM verdict that never blocks); ensure the FINAL harness run reflects the milestone's true state. Return the marker receipt. The marker is the gate.`),
+If you edited src/**, re-run prior milestones' assertions once (regression guard). The harness writes ${PROJECT}/verify/report.json (schema: packages/skills/verify/report.schema.json — per-assertion observed-vs-expected, the marker, screenshots, the advisory canvas-not-blank/VLM verdict that never blocks); ensure the FINAL harness run reflects the milestone's true state. Return the marker receipt. The marker is the gate.`,
+      contract({ artifacts: ['verify/report.json'], owns: ['src/**', 'verify/**', 'MEMORY.md'] })),
     { label: `W5 verify ${mid}`, phase: 'W5 Verify+Fix', schema: VERIFY_RESULT_SCHEMA }
   )
 
