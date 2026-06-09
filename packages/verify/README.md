@@ -41,6 +41,25 @@ Output:
 The CLI **always exits 0** — the marker is the signal, not the exit code
 (a missing marker = FAILED by default).
 
+## Structural ≤3 self-fix bound (`src/fixcycles.ts`)
+
+The W5 self-fix loop is the **agent re-invoking `verify-milestone <project> <mid>`** after each
+`src/**` edit. The harness is stateless per invocation, so to make the SKILL's **≤3-cycle** bound
+ENFORCED (not trusted to the model), the harness owns a **persistent per-milestone attempt counter**
+in a sidecar `<projectDir>/verify/.fixcycles-<mid>.json`. Each invocation reads+increments it:
+
+- It runs the **initial pass + at most 3 self-fix re-verifies** (so `report.fixCycles` is 0 on the
+  initial pass, 1..3 on a self-fix pass).
+- On the **4th re-invoke** for a still-FAILED milestone, the harness **refuses to run another verify**:
+  it emits `VALIDATION_FAILED: self-fix bound (3) exhausted — <last failures>` and returns
+  **before launching Chromium** — so a runaway re-invoke loop cannot burn cost or hit the node timeout.
+- The counter **resets** (sidecar removed) the moment a milestone **passes**, and is absent for a fresh
+  milestone — each milestone gets its own independent budget; a re-run after a genuine fix starts clean.
+
+**Anti-reward-hack:** at the bound the harness emits an HONEST `VALIDATION_FAILED` carrying the last
+real failures. It NEVER fakes a pass, never weakens an assertion, never touches the oracle — it only
+STOPS the fix loop. An honest FAILED after 3 cycles is the correct output.
+
 ## Layout (grammar §5.1)
 
 ```
@@ -60,8 +79,9 @@ packages/verify/
 
 ## What it does NOT do
 
-- It does **not** edit any file (the self-fix loop is the W5 *agent's* job; this
-  runner only observes + reports).
+- It does **not** edit any GAME file (the self-fix loop is the W5 *agent's* job; this
+  runner only observes + reports). It writes ONLY its own artifacts under `verify/`
+  (`report.json`, screenshots, and the bound counter `.fixcycles-<mid>.json`).
 - It does **not** contain per-game logic (general interpreter).
 - It does **not** block on the VLM (advisory only).
 - It does **not** touch `spec/gdd.json`, the assertions, or the `__GAME__` hook

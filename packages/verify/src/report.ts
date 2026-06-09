@@ -92,21 +92,33 @@ export interface BuildReportArgs {
   durationMs: number;
   bootFailed: boolean;
   greenOnEntry: boolean;
+  /**
+   * Self-fix cycles ALREADY consumed before this pass (0 on the initial pass,
+   * 1..3 on a self-fix re-verify), threaded from the harness-owned persistent
+   * per-milestone counter (fixcycles.ts). Defaults to 0 (the single-pass happy
+   * path). Capped at 3 by the caller per the report.schema range.
+   */
+  fixCycles?: number;
 }
 
 /**
- * Build the report object. The runner is single-pass (no self-fix), so:
- *   fixCycles = 0; fixOutcome = passed_first_try | boot_failed | exhausted-not-
- *   reached. A single-pass FAILED (assertions failed, booted clean) is recorded
- *   as the honest first-pass verdict — the W5 AGENT decides whether to enter its
- *   bounded fix loop on top of this.
+ * Build the report object. Each invocation runs ONE verify pass; the bounded
+ * self-fix loop is driven by the W5 AGENT re-invoking the CLI, but the CYCLE COUNT
+ * is owned by the harness (fixcycles.ts) and threaded in via `fixCycles`:
+ *   - initial pass: fixCycles=0
+ *   - k-th self-fix re-verify (after the agent edited src and re-invoked): fixCycles=k
+ * fixOutcome: passed_first_try (passed, 0 cycles) | fixed (passed after >=1 cycle)
+ *   | boot_failed | exhausted (clean-boot FAILED — surfaced honestly).
  */
 export function buildReport(args: BuildReportArgs): VerifyReport {
+  const fixCycles = Math.min(Math.max(args.fixCycles ?? 0, 0), 3);
   const fixOutcome = args.bootFailed
     ? 'boot_failed'
     : args.passed
-      ? 'passed_first_try'
-      : 'exhausted'; // single-pass: a clean-boot FAILED is surfaced honestly
+      ? fixCycles > 0
+        ? 'fixed'
+        : 'passed_first_try'
+      : 'exhausted'; // a clean-boot FAILED is surfaced honestly
 
   return {
     milestoneId: args.milestoneId,
@@ -115,7 +127,7 @@ export function buildReport(args: BuildReportArgs): VerifyReport {
     summary: args.summary,
     assertions: args.results.map(toReportAssertion),
     buildHealth: { greenOnEntry: args.greenOnEntry },
-    fixCycles: 0,
+    fixCycles,
     fixOutcome,
     advisoryVlm: args.advisoryVlm,
     screenshots: args.screenshots,

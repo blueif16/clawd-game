@@ -41,6 +41,17 @@ export function formatBootFailed(detail?: string): string {
 }
 
 /**
+ * The bound-exhausted marker — the harness REFUSES to run another verify pass
+ * because the structural ≤N self-fix bound is used up (emitted BEFORE booting, so
+ * the cost is capped). It is an HONEST VALIDATION_FAILED carrying the last real
+ * failures; it never fakes a pass and never touches the oracle.
+ */
+export function formatBoundExhausted(maxCycles: number, lastFailures?: string): string {
+  const tail = lastFailures && lastFailures.trim() ? lastFailures.trim() : 'last verify failed';
+  return `VALIDATION_FAILED: self-fix bound (${maxCycles}) exhausted — ${tail}`;
+}
+
+/**
  * The two-line parser (ported verbatim from gamedevbench validation.py).
  * Scans output for the FIRST marker; PASSED wins iff found first. The optional
  * trailing group is the human-readable message. A MISSING marker = FAILED by

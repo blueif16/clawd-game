@@ -158,7 +158,18 @@ assertions are AUTHORITATIVE and decide the marker SOLELY; the advisory VLM (§7
 > Lanham/RavindraTarunokusumo (stuck-detection + termination ladder); [R] "Debugging Decay" (GPT-4: 50%
 > worse after 1 attempt, 80% after 3, 99% after 7).
 
-On `VALIDATION_FAILED`, run a bounded repair loop, **capped at 3 cycles**:
+On `VALIDATION_FAILED`, run a bounded repair loop, **capped at 3 cycles**. **The cap is
+STRUCTURALLY ENFORCED by the harness, not by your adherence to this prose.** The self-fix loop is
+you re-invoking `verify-milestone <project> <mid>` after each `src/**` edit; the harness owns a
+PERSISTENT per-milestone attempt counter (sidecar `verify/.fixcycles-<mid>.json`) that it
+reads+increments every invocation. It runs the initial pass + at most **3 self-fix re-verifies**;
+on the 4th re-invoke for the same FAILED milestone it **refuses to run another verify** — it emits
+`VALIDATION_FAILED: self-fix bound (3) exhausted — <last failures>` and exits **before booting
+Chromium** (so a runaway re-invoke loop cannot burn cost or hit the node timeout). The counter
+RESETS the moment the milestone passes (and is absent for a fresh milestone), so a genuine fix
+re-run starts clean. **Do NOT try to defeat this** (e.g. by deleting the sidecar or changing the
+project dir to dodge the counter) — the honest bound-exhausted FAILED is the correct output; faking
+a clean slate to keep grinding is the forbidden reward-hack. Hitting the cap is a FEATURE.
 
 ```
 cycle = 0
@@ -183,10 +194,11 @@ WHILE marker == FAILED AND cycle < 3:
 AFTER the loop: if marker still FAILED → SURFACE it honestly (exhausted or stalled). Record fixOutcome.
 ```
 
-**Stop conditions (the ladder):** all assertions pass → done; a boot/infra error that isn't code-fixable
-→ surface (don't burn cycles on a non-booting game); the same failure signature repeats → **stalled** →
-surface; 3 cycles reached → **exhausted** → surface. **An honest `VALIDATION_FAILED` after the bounded
-loop is the correct output** — it means the real mechanic genuinely doesn't work yet (often a real
+**Stop conditions (the ladder):** all assertions pass → done (the harness resets the counter); a boot/infra
+error that isn't code-fixable → surface (don't burn cycles on a non-booting game); the same failure signature
+repeats → **stalled** → stop early yourself (don't wait to hit the cap); **3 cycles reached → exhausted → the
+harness refuses the 4th verify and emits the bound-exhausted marker for you**. **An honest `VALIDATION_FAILED`
+after the bounded loop is the correct output** — it means the real mechanic genuinely doesn't work yet (often a real
 capability gap W4 flagged). Hitting the cap is a FEATURE, not a defect. _([E] Lanham "bounded-stop is a
 feature".)_
 
@@ -288,7 +300,8 @@ failure. **This is the definition of "the game works" — not "the build succeed
 ## 10. THE ARTIFACTS YOU WRITE / TOUCH
 
 Relative to the project dir:
-- **`verify/report.json`** — schema-valid (`report.schema.json`): the per-assertion proof + marker + fix trail + advisory VLM.
+- **`verify/report.json`** — schema-valid (`report.schema.json`): the per-assertion proof + marker + fix trail + advisory VLM. `fixCycles` is the harness-owned count of self-fix re-verifies already run (0 = initial pass, 1..3 = self-fix passes); `fixOutcome=exhausted` once the bound is hit.
+- **`verify/.fixcycles-<mid>.json`** — the harness-owned persistent bound counter (sidecar). NOT yours to edit/delete — the harness reads+increments it to enforce the ≤3 cap structurally and resets it on a pass.
 - **`verify/*.png`** — screenshots (end state + per failure).
 - **The verbatim marker** on stdout — the gate the orchestrator parses.
 - **`src/**` (ONLY during a self-fix)** — scoped, root-cause GAME-CODE edits. **NEVER** `spec/gdd.json`, the

@@ -23,9 +23,17 @@ import {
   type GddContext,
 } from './compile.js';
 import { OBSERVE_INIT_SCRIPT } from './observe.js';
-import { formatPassed, formatFailed, formatBootFailed } from './marker.js';
+import { formatPassed, formatFailed, formatBootFailed, formatBoundExhausted } from './marker.js';
 import { runAdvisoryVlm, type AdvisoryVlm } from './vlm.js';
 import { buildReport, writeReport, type VerifyReport } from './report.js';
+import {
+  MAX_FIX_CYCLES,
+  readAttempts,
+  recordFailedAttempt,
+  resetAttempts,
+  isBoundExhausted,
+  reportableFixCycles,
+} from './fixcycles.js';
 
 const VIEWPORT = { width: 800, height: 600 };
 const BOOT_NAV_TIMEOUT_MS = 30000;
@@ -299,6 +307,43 @@ export async function runMilestone(opts: {
   const ctx: GddContext = opts.context ?? {};
   const greenOnEntry = opts.greenOnEntry ?? true;
 
+  // ── STRUCTURAL ≤N SELF-FIX BOUND (harness-owned, enforced BEFORE booting) ──
+  // The self-fix loop is the W5 AGENT re-invoking this CLI after each src edit;
+  // the harness is stateless per invocation, so the bound lives in a persistent
+  // per-milestone sidecar (verify/.fixcycles-<mid>.json) the harness owns. We read
+  // the attempt count up front. Once it exceeds MAX_FIX_CYCLES self-fix cycles
+  // (1 initial pass + N re-verifies), we REFUSE to run another pass: emit the
+  // honest bound-exhausted FAILED marker and return IMMEDIATELY — BEFORE launching
+  // Chromium — so the cost is capped no matter how many times the agent re-invokes.
+  // This is the one place the prose bound becomes structural; it ONLY stops the
+  // loop (it never fakes a pass or touches the oracle).
+  const { attempts, lastFailures } = readAttempts(projectDir, milestoneId);
+  if (isBoundExhausted(attempts)) {
+    const markerLine = formatBoundExhausted(MAX_FIX_CYCLES, lastFailures);
+    const summary = `self-fix bound (${MAX_FIX_CYCLES}) exhausted — ${
+      lastFailures && lastFailures.trim() ? lastFailures.trim() : 'last verify failed'
+    }`;
+    const report = buildReport({
+      milestoneId,
+      passed: false,
+      summary,
+      results: [], // no pass ran; the prior FAILED report holds the per-assertion detail
+      advisoryVlm: { ran: false, flag: 'skipped' },
+      screenshots: [],
+      consoleErrors: [],
+      startedAt,
+      durationMs: Date.now() - t0,
+      bootFailed: false,
+      greenOnEntry,
+      fixCycles: MAX_FIX_CYCLES,
+    });
+    report.fixOutcome = 'exhausted';
+    const reportPath = writeReport(projectDir, report);
+    return { report, markerLine, reportPath };
+  }
+  // fixCycles to report for THIS pass = self-fix cycles already consumed (0 initial).
+  const fixCycles = reportableFixCycles(attempts);
+
   const distDir = resolveDistDir(projectDir);
   const screenshots: string[] = [];
   const results: AssertionResult[] = [];
@@ -331,9 +376,14 @@ export async function runMilestone(opts: {
         durationMs: Date.now() - t0,
         bootFailed: true,
         greenOnEntry,
+        fixCycles,
       });
       report.fixOutcome = 'boot_failed';
       const reportPath = writeReport(projectDir, report);
+      // A boot failure is still a FAILED pass: if the agent edits src and re-invokes
+      // (a code-fixable boot error), that re-verify must count toward the SAME bound,
+      // so the boot-fix loop is capped exactly like the assertion-fix loop.
+      recordFailedAttempt(projectDir, milestoneId, attempts, summary);
       return { report, markerLine, reportPath };
     }
 
@@ -386,8 +436,21 @@ export async function runMilestone(opts: {
       durationMs: Date.now() - t0,
       bootFailed: false,
       greenOnEntry,
+      fixCycles,
     });
     const reportPath = writeReport(projectDir, report);
+
+    // ── update the harness-owned bound counter for the NEXT invocation ────────
+    // PASS → the bounded loop is over: reset the budget (a future re-run starts
+    // clean). FAIL → record this as a consumed attempt so the next agent re-invoke
+    // (after an src edit) advances toward the cap; once it crosses the bound the
+    // gate above refuses to boot. This is what makes the ≤N bound STRUCTURAL: the
+    // harness itself stops the loop, not the model's adherence to the prose.
+    if (passed) {
+      resetAttempts(projectDir, milestoneId);
+    } else {
+      recordFailedAttempt(projectDir, milestoneId, attempts, summary);
+    }
     return { report, markerLine, reportPath };
   } finally {
     await teardown(state);
