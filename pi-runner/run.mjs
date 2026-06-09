@@ -37,7 +37,7 @@
 //   --node-timeout N   hard-kill a node after N seconds (default $PI_RUNNER_NODE_TIMEOUT or 1800).
 //   --dry-run          extract + build prompts + print the exact pi commands; invoke no model.
 
-import { spawn } from "node:child_process";
+import { spawn, execFileSync } from "node:child_process";
 import { createInterface } from "node:readline";
 import fs from "node:fs";
 import os from "node:os";
@@ -72,10 +72,18 @@ loadDefaults();
 // PI_RUNNER_NODE_TIMEOUT  optional default node hard-kill seconds (--node-timeout overrides).
 //                    Set generously: heavy nodes (long TTS / build / render steps) run long on a
 //                    cheap coding-plan model. Default 1800 (30 min); 600 was too tight.
+// PI_RUNNER_ESCALATE  "1" to enable the escalation gate (default off). On a VERIFIED failure, consult
+//                    PI_RUNNER_ESCALATE_MODEL (optionally on PI_RUNNER_ESCALATE_PROVIDER) once, after
+//                    PI_RUNNER_MAX_RETRIES (default 1) same-model transient retries. Consult model
+//                    lives in ~/.pi/agent/models.json. Spec: reference/escalation.md.
+// PI_RUNNER_CONTRACT_EXT  "1" loads the bundled extensions/node-contract.ts (typed submit_result tool
+//                    + in-loop owned-paths block) via -e; a path loads a custom one; default off.
 const resolveFrom = (root, p, fb) => (!p ? fb : path.isAbsolute(p) ? p : path.join(root, p));
-const ROOT = process.env.PI_RUNNER_ROOT ? path.resolve(process.env.PI_RUNNER_ROOT) : path.resolve(HERE, "..");
-const RUN_CWD = resolveFrom(ROOT, process.env.PI_RUNNER_CWD, ROOT);
-const WORKFLOW = resolveFrom(ROOT, process.env.PI_RUNNER_WORKFLOW, path.join(ROOT, ".claude/workflows/CHANGEME.js"));
+// BASE_* = the real (main) checkout. With --worktree these are remapped to a per-run git
+// worktree below (ROOT/RUN_CWD become the worktree); without it ROOT===BASE_ROOT etc.
+const BASE_ROOT = process.env.PI_RUNNER_ROOT ? path.resolve(process.env.PI_RUNNER_ROOT) : path.resolve(HERE, "..");
+const BASE_RUN_CWD = resolveFrom(BASE_ROOT, process.env.PI_RUNNER_CWD, BASE_ROOT);
+const WORKFLOW = resolveFrom(BASE_ROOT, process.env.PI_RUNNER_WORKFLOW, path.join(BASE_ROOT, ".claude/workflows/CHANGEME.js"));
 // ==========================================================================================
 
 function parseArgs(argv) {
@@ -96,6 +104,8 @@ function parseArgs(argv) {
     else if (k === "--status") a.status = next();
     else if (k === "--dry-run") a.dryRun = true;
     else if (k === "--debug") a.debug = true;
+    else if (k === "--worktree") a.worktree = true;
+    else if (k === "--keep-worktree") { a.worktree = true; a.keepWorktree = true; }
     else if (k === "--node-timeout") a.nodeTimeout = Number(next());
     else throw new Error(`unknown arg: ${k}`);
   }
@@ -124,9 +134,40 @@ const NODE_TIMEOUT_S =
 // GROW, never repeat), fixed separately by the message_update slimming below.
 const REPEAT_KILL = process.env.PI_RUNNER_REPEAT_KILL !== undefined ? Number(process.env.PI_RUNNER_REPEAT_KILL) : 400;
 
+// ESCALATION (advisor inversion) — opt-in. On a VERIFIED failure (artifact-contract breach, stuck
+// loop, timeout, degenerate output — NEVER self-confidence) consult a stronger, ideally different-
+// family model ONCE, fed the cheap attempt's failure evidence (not a blind retry). Transient infra
+// noise gets a cheap same-model retry; a missing UPSTREAM input halts (escalation can't manufacture
+// it). All per-repo selection is wiring in .env; the consult model lives in ~/.pi/agent/models.json.
+// Spec: reference/escalation.md. (cp's qwen3.7-max is already its top tier → escalate CROSS-family.)
+const ESCALATE = /^(1|true|on)$/i.test(process.env.PI_RUNNER_ESCALATE || "");
+const ESCALATE_MODEL = process.env.PI_RUNNER_ESCALATE_MODEL || "";
+const ESCALATE_PROVIDER = process.env.PI_RUNNER_ESCALATE_PROVIDER || "";
+const MAX_RETRIES = process.env.PI_RUNNER_MAX_RETRIES !== undefined ? Number(process.env.PI_RUNNER_MAX_RETRIES) : 1;
+
+// NODE-CONTRACT extension (generic): a typed `submit_result` tool (structured return, no fence to
+// scrape) + an in-loop owned-paths `tool_call` block. Opt-in via PI_RUNNER_CONTRACT_EXT (path to the
+// .ts, or "1" for the bundled pi-runner/extensions/node-contract.ts). Loaded with -e (explicit -e
+// still loads under --no-extensions). Default OFF until the qwen tool-call spike passes; the driver
+// keeps the fenced-JSON parser as a fallback, so ON or OFF never breaks a run. Spec: reference/artifact-contract.md.
+const contractExtEnv = process.env.PI_RUNNER_CONTRACT_EXT || "";
+const contractExtension = /^(0|false|off|)$/i.test(contractExtEnv)
+  ? null
+  : /^(1|true|on)$/i.test(contractExtEnv) ? path.join(HERE, "extensions", "node-contract.ts") : path.resolve(contractExtEnv);
+
+// WORKTREE remap (opt-in via --worktree / PI_RUNNER_WORKTREE=1). When on, every node runs inside a
+// fresh per-run git worktree (ROOT/RUN_CWD point there); when off, ROOT===BASE_ROOT (unchanged).
+const WORKTREE = (args.worktree === true || process.env.PI_RUNNER_WORKTREE === "1") && !args.dryRun;
+const cwdRel = path.relative(BASE_ROOT, BASE_RUN_CWD); // e.g. "remotion-svg-primitives" (or "" if cwd===root)
+const wtRoot = WORKTREE ? setupWorktree(args.run, BASE_ROOT, cwdRel, BASE_RUN_CWD) : null;
+const ROOT = wtRoot || BASE_ROOT;
+const RUN_CWD = wtRoot ? path.join(wtRoot, cwdRel) : BASE_RUN_CWD;
+
 const outRel = `out/${args.run}`;
-const promptDir = path.join(RUN_CWD, outRel, "_pi");
-const statusPath = path.resolve(args.status || path.join(RUN_CWD, outRel, "run-status.json"));
+// Status + prompt/event logs ALWAYS live in the MAIN tree, so monitoring (run-status.json /
+// status.mjs / watch.mjs) is unaffected by worktree mode and survives teardown.
+const promptDir = path.join(BASE_RUN_CWD, outRel, "_pi");
+const statusPath = path.resolve(args.status || path.join(BASE_RUN_CWD, outRel, "run-status.json"));
 
 const abs = (p) => (path.isAbsolute(p) ? p : path.join(RUN_CWD, p));
 const ensureDir = (d) => fs.mkdirSync(d, { recursive: true });
@@ -161,6 +202,59 @@ function artifactStateAbs(p) {
   catch { return { path: p, exists: false, bytes: 0 }; }
 }
 
+// ===== WORKTREE ISOLATION (opt-in) =========================================================
+// Create a fresh per-run git worktree (branch pi/<run>, checked out at HEAD) so N concurrent runs
+// are PHYSICALLY isolated — a node in one run cannot see or clobber another lesson's files. The
+// worktree lives OUTSIDE the repo (a sibling .pi-worktrees/<run>) so it needs no gitignore and can
+// never recurse. node_modules is symlinked from the main checkout (it is gitignored, so the fresh
+// checkout has none). The workflow's hardcoded absolute paths are rewritten BASE_ROOT→wtRoot per
+// node in runNode, so agents write INTO the worktree; status + logs stay in the MAIN tree (below).
+const git = (cwd, ...a) => execFileSync("git", a, { cwd, stdio: ["ignore", "pipe", "pipe"] }).toString().trim();
+function setupWorktree(run, baseRoot, cwdRel, baseRunCwd) {
+  const wtRoot = path.join(path.dirname(baseRoot), ".pi-worktrees", run);
+  const branch = `pi/${run}`;
+  // Idempotent: drop any stale worktree at this path first (a prior run / crash), then re-add.
+  try { git(baseRoot, "worktree", "remove", "--force", wtRoot); } catch {}
+  try { fs.rmSync(wtRoot, { recursive: true, force: true }); } catch {}
+  ensureDir(path.dirname(wtRoot));
+  // -B resets branch pi/<run> to HEAD so the run starts from a known committed state (clean room).
+  git(baseRoot, "worktree", "add", "-B", branch, wtRoot, "HEAD");
+  // Link node_modules (gitignored → absent in the fresh checkout) for the package dir + repo root.
+  for (const rel of [cwdRel, ""].filter((v, i, arr) => arr.indexOf(v) === i)) {
+    const target = path.join(rel ? baseRunCwd : baseRoot, "node_modules");
+    const link = path.join(wtRoot, rel, "node_modules");
+    try { if (fs.existsSync(target) && !fs.existsSync(link)) fs.symlinkSync(target, link, "dir"); } catch {}
+  }
+  console.log(`worktree → ${wtRoot}  (branch ${branch}, node_modules symlinked)\n`);
+  return wtRoot;
+}
+// After the run: preserve the lesson SOURCE on its branch, copy the deliverable (out/<run>) back to
+// the MAIN tree (out/ is gitignored, so it would vanish with the worktree), then remove the worktree
+// (branch persists for a human-gated merge). On failure we KEEP the worktree for inspection.
+function finishWorktree(wtRoot, run, baseRoot, baseRunCwd, cwdRel, ok, keep) {
+  const wtCwd = path.join(wtRoot, cwdRel);
+  try {
+    git(wtRoot, "add", "-A");
+    try { git(wtRoot, "commit", "-m", `pi(${run}): lesson run artifacts`); } catch {} // nothing to commit is fine
+  } catch (e) { console.error(`worktree commit skipped: ${e.message}`); }
+  // Copy the deliverable back so it survives teardown and is visible in the main tree.
+  try {
+    const src = path.join(wtCwd, "out", run);
+    if (fs.existsSync(src)) {
+      const dst = path.join(baseRunCwd, "out", run);
+      ensureDir(dst);
+      fs.cpSync(src, dst, { recursive: true, force: true });
+      console.log(`worktree → copied out/${run} back to the main tree`);
+    }
+  } catch (e) { console.error(`worktree copy-back skipped: ${e.message}`); }
+  if (ok && !keep) {
+    try { git(baseRoot, "worktree", "remove", "--force", wtRoot); console.log(`worktree removed (branch pi/${run} kept for merge)`); }
+    catch (e) { console.error(`worktree remove skipped: ${e.message}`); }
+  } else {
+    console.log(`worktree KEPT at ${wtRoot} (${ok ? "--keep-worktree" : "run not ok — inspect it"}); branch pi/${run}`);
+  }
+}
+
 // OUTPUT CONTRACT (the "artifact contract") — the generic marker layer Claude Code leaves to the
 // orchestrator. Native Claude gives a skill `description` (requirements), `## Inputs`/`## Output`
 // prose (I/O), and a JSON `schema` (the RETURN shape, validated + retried) — but it verifies the
@@ -177,6 +271,10 @@ function markerPaths(prompt, key) {
   if (!m) return null;
   const paths = m[1].split(/\s+/).filter(Boolean);
   return paths.length ? paths : null;
+}
+// Presence-only marker (no value), e.g. DRIVER-NO-ESCALATE — opts a node out of the escalation gate.
+function hasMarker(prompt, key) {
+  return new RegExp(`(?:^|\\n)\\s*${key}\\b`).test(prompt || "");
 }
 // Resolve a possibly-relative path to absolute the SAME forgiving way artifactState does, so the
 // owned-path check and the existence check agree on where a file is.
@@ -235,6 +333,8 @@ const status = {
   source: path.relative(ROOT, WORKFLOW),
   provider: args.provider,
   model: model || null,
+  escalate: ESCALATE ? { provider: ESCALATE_PROVIDER || args.provider, model: ESCALATE_MODEL, maxRetries: MAX_RETRIES } : false,
+  contractExt: contractExtension ? path.basename(contractExtension) : false,
   dryRun: args.dryRun,
   debug: DEBUG,
   startedAt: nowISO(),
@@ -285,26 +385,42 @@ function lastJsonBlock(text) {
   return null;
 }
 
-function piArgs(promptFileAbs) {
+function piArgs(promptFileAbs, opts = {}) {
   // headless executor: print+json, trust project files, ephemeral, --offline (no startup network
   // ops; the model call still works), --no-extensions. NOTE: models.json is CORE pi config, not an
   // extension, so --no-extensions does NOT disable it — pi still resolves the `cp` provider + its
   // credential from ~/.pi/agent/models.json. We only NAME the provider; --model when pinned; -e only
-  // for an explicit custom-API/OAuth provider.
+  // for an explicit custom-API/OAuth provider or the generic node-contract extension.
+  // opts = { model, provider, toolsAllow, toolsDeny } — per-node overrides (escalation consult model,
+  // tool gating) that ride ONE node without mutating module state.
+  const prov = opts.provider || args.provider;
+  const mdl = opts.model !== undefined ? opts.model : model;
   const a = ["-p", "--mode", "json", "-a", "--no-session", "--offline", "--no-extensions",
-             "--provider", args.provider];
-  if (model) a.push("--model", model);
-  if (extension) a.push("-e", extension);
+             "--provider", prov];
+  if (mdl) a.push("--model", mdl);
+  if (opts.toolsAllow) a.push("--tools", opts.toolsAllow);       // DRIVER-TOOLS marker → per-node allowlist
+  if (opts.toolsDeny) a.push("--exclude-tools", opts.toolsDeny); // DRIVER-EXCLUDE-TOOLS marker → per-node denylist
+  if (contractExtension) a.push("-e", contractExtension);        // generic node-contract ext (submit_result + owns-block), opt-in
+  if (extension) a.push("-e", extension);                        // explicit custom-provider ext (still loads under --no-extensions)
   a.push(`@${promptFileAbs}`);
   return a;
 }
 
-async function runNode(node) {
+async function runNode(node, opts = {}) {
   const n = status.nodes[node.id];
   n.status = "running";
   n.startedAt = nowISO();
+  n.modelUsed = (opts.model !== undefined ? opts.model : model) || "(default)";
+  n.providerUsed = opts.provider || args.provider;
   const t0 = Date.now();
   writeStatus();
+
+  // WORKTREE: rewrite the workflow's hardcoded absolute paths (under BASE_ROOT) to THIS run's
+  // worktree, ONCE — so the agent writes INTO the worktree AND the driver's own marker checks
+  // (DRIVER-PREFLIGHT / DRIVER-ARTIFACTS / DRIVER-OWNS, all parsed from node.prompt below) resolve
+  // there too. wtRoot is a sibling dir that never contains BASE_ROOT as a substring, so this is
+  // idempotent. No-op when not isolated.
+  if (wtRoot && node.prompt.includes(BASE_ROOT)) node.prompt = node.prompt.split(BASE_ROOT).join(wtRoot);
 
   // DRIVER-side preflight short-circuit (see driverPreflightPaths): resolve a pure existence-check
   // node in plain code, no pi spawn.
@@ -334,8 +450,23 @@ async function runNode(node) {
 
   ensureDir(promptDir);
   const promptFile = path.join(promptDir, `${node.id}.prompt.md`);
-  fs.writeFileSync(promptFile, node.prompt + returnProtocol(node.label));
-  const argv = piArgs(promptFile);
+  // promptPrefix carries the escalation CONSULT preamble (the prior cheap attempt's failure evidence)
+  // on a re-run; empty on attempt 0.
+  fs.writeFileSync(promptFile, (opts.promptPrefix || "") + node.prompt + returnProtocol(node.label));
+  // Per-node TOOL GATING (DRIVER-TOOLS / DRIVER-EXCLUDE-TOOLS markers): shrink the cheap model's
+  // surface so a check node can't wander/write. Default (no marker) = full toolset, unchanged.
+  const toolAllow = markerPaths(node.prompt, "DRIVER-TOOLS");
+  const toolDeny = markerPaths(node.prompt, "DRIVER-EXCLUDE-TOOLS");
+  const argv = piArgs(promptFile, {
+    model: opts.model, provider: opts.provider,
+    toolsAllow: toolAllow ? toolAllow.join(",") : null,
+    toolsDeny: toolDeny ? toolDeny.join(",") : null,
+  });
+  // Hand the node's owned lane to the node-contract extension's in-loop block (PI_NODE_OWNS); only set
+  // when the node declares DRIVER-OWNS and the extension is active. No-op otherwise.
+  const childEnv = process.env;
+  const ownLane = markerPaths(node.prompt, "DRIVER-OWNS");
+  const spawnEnv = contractExtension && ownLane ? { ...childEnv, PI_NODE_OWNS: ownLane.join(" ") } : childEnv;
   console.log(`  ▶ ${node.label}  [${node.id}]`);
 
   if (args.dryRun) {
@@ -359,6 +490,7 @@ async function runNode(node) {
     const toolBreakdown = {};                                       // toolName -> count
     let thinkingChars = 0, thinkingDeltas = 0, thinkFirstAt = 0, thinkLastAt = 0;
     let lastDelta = null, repeatRun = 0;                            // consecutive identical-delta run (stuck-loop guard)
+    let submittedResult = null;                                     // structured return from the node-contract submit_result tool (if active)
     const tokens = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, billable: 0, contextPeak: 0, cost: 0 };
     // SINGLE FLIP (--debug) gates the FORENSIC artifacts: the event stream AND the timeline
     // debug.log. The stream is SLIMMED as written (message_update snapshots stripped below), so it
@@ -372,7 +504,7 @@ async function runNode(node) {
 
     // stdin MUST be closed — a headless CLI with an open stdin pipe (no TTY) blocks forever
     // waiting for EOF (this caused a silent ~10-min startup hang).
-    const child = spawn("pi", argv, { cwd: RUN_CWD, env: process.env, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn("pi", argv, { cwd: RUN_CWD, env: spawnEnv, stdio: ["ignore", "pipe", "pipe"] });
 
     const refresh = (force) => {
       Object.assign(n.live, {
@@ -419,7 +551,15 @@ async function runNode(node) {
         n.live.currentTool = tn;
         dbg(`tool▶ ${tn}`);
       }
-      else if (t.startsWith("tool_execution_end")) { dbg(`tool✓ ${n.live.currentTool || ""}`); n.live.currentTool = null; }
+      else if (t.startsWith("tool_execution_end")) {
+        // node-contract structured return: the typed submit_result tool's `details` ride this event.
+        // Field shape varies by pi version — probe the documented spots; the --debug archive nails it.
+        const tn = ev.toolName || ev.tool || ev.name || (ev.toolCall && ev.toolCall.name) || n.live.currentTool;
+        const res = ev.result || ev.toolResult || ev.output || null;
+        const det = (res && (res.details || res.detail)) || ev.details || null;
+        if (tn === "submit_result" && det && typeof det === "object") submittedResult = det;
+        dbg(`tool✓ ${n.live.currentTool || ""}`); n.live.currentTool = null;
+      }
       else if (dbgStream && t) dbg(`ev ${t}`);
       // Archive write — SLIM message_update events: drop the cumulative `partial`/`message` snapshots
       // pi re-embeds on every delta. THAT redundancy is what makes a raw transcript 100s of MB; the
@@ -474,7 +614,10 @@ async function runNode(node) {
       if (evStream) evStream.end();
       if (dbgStream) dbgStream.end();
       if (DEBUG) { n.eventsFile = path.relative(RUN_CWD, eventsFile); n.debugLog = path.relative(RUN_CWD, debugLog); }
-      const parsed = lastJsonBlock(assistantText);
+      // Structured return FIRST (node-contract submit_result tool), else the forgiving fenced-JSON
+      // parser. So enabling the extension is non-breaking: if the model didn't call the tool, we still
+      // recover the return block exactly as before.
+      const parsed = submittedResult || lastJsonBlock(assistantText);
       n.artifacts = ((parsed && parsed.outputArtifacts) || []).map(artifactState);
       // Suspect ONLY when the node DECLARED artifacts that are missing. A node that declares
       // none (a check/preflight/gate node legitimately writes nothing) is judged by its
@@ -492,6 +635,9 @@ async function runNode(node) {
         n.requiredArtifacts = reqChecks;
         contractMissing = reqChecks.filter((c) => !c.exists).map((c) => c.path);
       }
+      // Persist the EMPIRICAL signals the escalation classifier reads (all already computed here).
+      n.contractMissing = contractMissing;
+      n.parsedOk = !!parsed;
       // Soft owned-path containment on the SELF-REPORTED writes (the hard cross-contamination gate —
       // git diff ⊆ owns — arrives with per-stage commits; until then this catches a node that ADMITS
       // a write outside its lane).
@@ -537,6 +683,71 @@ async function runNode(node) {
   });
 }
 
+// ESCALATION GATE (advisor inversion). ONE classifier over signals runNode already computes — all
+// EMPIRICAL (artifact-contract breach, stuck loop, timeout, degenerate output), NEVER self-confidence.
+// The artifact-contract breach is the centerpiece: we don't ask the model "are you sure", we stat()
+// the files it was REQUIRED to produce. Spec: reference/escalation.md.
+function classifyFailure(n) {
+  if (n.driverPreflight) return "HALT";                                  // driver-side gate, no model ran
+  const issueText = `${(n.issues || []).join(" ")} ${n.summary || ""}`;
+  if ((n.status === "blocked" || n.status === "gap") && /upstream|missing input/i.test(issueText)) return "HALT"; // escalation can't manufacture a missing input
+  if (n.contractMissing && n.contractMissing.length) return "ESCALATE"; // contract breach — ground-truth trigger
+  if (n.killedRepeat) return "ESCALATE";                                 // stuck loop — a same-model retry just loops again (correlated blind spots)
+  if (n.killedTimeout) return "ESCALATE";                                // over budget
+  if (n.exitCode && n.exitCode !== 0 && /rate.?limit|ECONN|ETIMEDOUT|EAI_AGAIN|socket hang up|\b429\b|\b5\d\d\b|network/i.test(n.stderrTail || "")) return "RETRY_SAME"; // infra, not capability
+  if (!n.parsedOk) return "DEGENERATE";                                  // no return block — retry once, then escalate
+  return "ESCALATE";                                                     // any other capability failure
+}
+// The consult is NOT blind: prepend the cheap attempt's VERIFIED failure evidence (not a score).
+function consultPreamble(n) {
+  const cls = (n.contractMissing && n.contractMissing.length) ? "contract"
+    : n.killedRepeat ? "loop" : n.killedTimeout ? "timeout" : !n.parsedOk ? "degenerate" : "capability";
+  const ev = [];
+  if (n.contractMissing && n.contractMissing.length) ev.push(`missing required artifact(s): ${n.contractMissing.join(", ")}`);
+  if (n.killedRepeat) ev.push(`looped on a repeated token (~${n.repeatRun}× identical delta)`);
+  if (n.killedTimeout) ev.push(`exceeded the ${NODE_TIMEOUT_S}s node budget`);
+  if (!n.parsedOk) ev.push("produced no parseable return-protocol block");
+  if (n.stderrTail) ev.push(`stderr: ${n.stderrTail.slice(-160)}`);
+  return [
+    "CONSULT — a cheaper model attempted this node and FAILED; do not repeat its mistake.",
+    `Failure class: ${cls}`,
+    `Evidence: ${ev.join(" | ") || "(none captured)"}`,
+    "Produce EVERY required artifact and end with the return-protocol JSON block.",
+    "", "",
+  ].join("\n");
+}
+// Wrapper the stage loop calls instead of runNode: attempt 0 on the cheap default; on a VERIFIED
+// failure, a bounded same-model retry for transient infra noise, else ONE cross-family consult fed
+// the failure evidence. Records n.attempts[] + n.escalated for observability (a wave that escalates
+// every run is a SKILL flaw, not a model flaw → feed Hermes). No-op (returns attempt 0) unless
+// PI_RUNNER_ESCALATE is on. Needs NO pi extension — it is a per-node --model/--provider override.
+async function runNodeWithEscalation(node) {
+  const snap = (x) => ({ model: x.modelUsed, provider: x.providerUsed, status: x.status, durationMs: x.durationMs, tokens: x.tokens });
+  let n = await runNode(node);                                            // attempt 0 — cheap default
+  if (!ESCALATE || args.dryRun) return n;
+  const attempts = [snap(n)];
+  let retriesLeft = MAX_RETRIES, escalatedYet = false;
+  while (n.status === "error" || n.status === "blocked") {
+    if (hasMarker(node.prompt, "DRIVER-NO-ESCALATE")) break;             // pure gates opt out
+    const decision = classifyFailure(n);
+    if (decision === "HALT") break;
+    if ((decision === "RETRY_SAME" || decision === "DEGENERATE") && retriesLeft > 0) {
+      retriesLeft--;
+      console.log(`    ↻ ${node.id} ${decision} retry (${retriesLeft} left)`);
+      n = await runNode(node);
+    } else if (decision === "ESCALATE" && !escalatedYet && ESCALATE_MODEL) {
+      escalatedYet = true;
+      console.log(`    ⤴ ${node.id} ESCALATE → ${(ESCALATE_PROVIDER || args.provider)}/${ESCALATE_MODEL}`);
+      n = await runNode(node, { model: ESCALATE_MODEL, provider: ESCALATE_PROVIDER || undefined, promptPrefix: consultPreamble(n) });
+    } else break;
+    attempts.push(snap(n));
+  }
+  n.attempts = attempts;
+  n.escalated = escalatedYet;
+  writeStatus();
+  return n;
+}
+
 (async () => {
   if (!args.dryRun && args.provider === "cp") {
     // Credentials/model live in pi's OWN global config now — nothing per-product to require. Just
@@ -565,13 +776,14 @@ async function runNode(node) {
     stageT0 = Date.now();
     status.stage = { index: i + 1, total: stages.length, phase: s.phase, nodes: s.nodes.map((x) => x.id), startedAt: nowISO(), elapsedMs: 0 };
     console.log(`[stage ${i + 1}/${stages.length}] [${s.phase}] ${s.nodes.map((x) => x.id).join(" ∥ ")}`);
-    const results = await Promise.all(s.nodes.map((node) => runNode(node)));
+    const results = await Promise.all(s.nodes.map((node) => runNodeWithEscalation(node)));
     console.log(`  └ stage ${i + 1}/${stages.length} done in ${((Date.now() - stageT0) / 1000).toFixed(1)}s  ·  run elapsed ${((Date.now() - RUN_T0) / 1000).toFixed(1)}s`);
     const bad = results.find((r) => r.status === "error" || r.status === "blocked");
     if (bad && !args.dryRun) {
       status.stage = null;
       status.done = true; status.ok = false; status.durationMs = Date.now() - RUN_T0; writeStatus();
       console.error(`\n✕ halted at ${bad.id} (${bad.status}) after ${((Date.now() - RUN_T0) / 1000).toFixed(1)}s. See ${statusPath}\n`);
+      if (wtRoot) finishWorktree(wtRoot, args.run, BASE_ROOT, BASE_RUN_CWD, cwdRel, false, args.keepWorktree);
       process.exit(1);
     }
   }
@@ -592,4 +804,5 @@ async function runNode(node) {
   const totS = (status.durationMs / 1000).toFixed(1), totMin = (status.durationMs / 60000).toFixed(1);
   const totTokK = status.totals.tokensBillable > 999 ? `${(status.totals.tokensBillable / 1000).toFixed(1)}k` : `${status.totals.tokensBillable}`;
   console.log(`\n${args.dryRun ? "DRY-RUN complete" : "✓ complete"} — ${status.totals.nodes} nodes in ${totS}s (${totMin}m) · ${status.totals.toolCalls} tools · ${totTokK} tok · status: ${statusPath}\n`);
+  if (wtRoot) finishWorktree(wtRoot, args.run, BASE_ROOT, BASE_RUN_CWD, cwdRel, status.ok === true, args.keepWorktree);
 })();
