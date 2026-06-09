@@ -165,8 +165,9 @@ session can retrace the evidence behind any edit. A claim with no doc on disk is
   with **A4** (the verify harness must actually DRIVE the documented controls to the goal — plat1's M3-A1
   errored "not drivable by natural input"; else we trade false-green for false-error). doc:
   `docs/bucket3-playability-research.md` (full brief + cited sources: Sturgeon-MKIII reachability /
-  gamedeveloper legibility / GMTK + Level-Design-Book onboarding). (commit: pending — W1/W4 skill edit + A4
-  harness in progress via sub-agents.)
+  gamedeveloper legibility / GMTK + Level-Design-Book onboarding). (commit: skill `4c3bec5` skillsys(write-gdd)
+  + A4 harness `7899534` skillsys(verify) — now executable END-TO-END: W1 authors the win-path assertion, the
+  harness drives the documented controls to the goal for real and FAILS honestly if unreachable. **A4 CLOSED.**)
 - _(future flaws/fixes append here so repeat-flaws become visible and the next diagnosis starts ahead.)_
 
 ## Stewardship note
