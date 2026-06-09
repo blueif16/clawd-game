@@ -189,6 +189,20 @@ session can retrace the evidence behind any edit. A claim with no doc on disk is
   gamedeveloper legibility / GMTK + Level-Design-Book onboarding). (commit: skill `4c3bec5` skillsys(write-gdd)
   + A4 harness `7899534` skillsys(verify) — now executable END-TO-END: W1 authors the win-path assertion, the
   harness drives the documented controls to the goal for real and FAILS honestly if unreachable. **A4 CLOSED.**)
+- 2026-06-09 — `scaffold/SKILL.md` + `templates/core` — **P4: surface the documented controls in-game.**
+  Playtest gap (the player "couldn't tell how to play"): `gdd.controls` was declared but never reached the
+  runtime (the build bundles `gameConfig.json`, NOT `spec/gdd.json`). W2 now copies `gdd.controls[]` verbatim
+  into a new universal `gameConfig.controlsHelp` group (§3.1; infra groups untouched) and the template
+  `TitleScreen` renders a generic "HOW TO PLAY" panel from it. De-hardcoded: renders WHATEVER the GDD declared
+  (any archetype); empty/absent → nothing. Builds green (core+platformer materialized). (commit: `c59d53c` ·
+  skillsys(scaffold); doc: `docs/bucket3-playability-research.md` — the legibility/onboarding gap.)
+- 2026-06-09 — `packages/verify/` (harness) + `verify/SKILL.md` — **A2: the ≤3 self-fix bound is now
+  STRUCTURALLY enforced, harness-side.** plat1's W5-M3 re-ran the harness dozens of times past the bound (79
+  FAILED markers) → burned to the 1800s node-timeout. The harness now owns a persistent per-milestone counter
+  (`verify/.fixcycles-<mid>.json`); once attempts > 3 it emits the honest bound marker and RETURNS BEFORE
+  booting Chromium (cost-capped; refusal idempotent), resets on pass. Anti-reward-hack: honest FAILED at the
+  bound, oracle untouched. Kept OUT of the canonical `run.mjs` (byte-identical preserved). typecheck green.
+  (commit: `7dcb1d0` · skillsys(verify); doc: `docs/handoff-fix-pipeline-findings.md` §A2.)
 - _(future flaws/fixes append here so repeat-flaws become visible and the next diagnosis starts ahead.)_
 
 ## Stewardship note
