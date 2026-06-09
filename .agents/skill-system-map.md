@@ -117,6 +117,23 @@ The skill system + orchestration are complete; these are the product-code builds
   that the proven `packages/verify/` runner exists, pointed W5 at it (invoke `verify-milestone <project> <mid>`,
   parse the marker, re-run the harness in the ≤3 fix loop) and added the harness to the immutable-oracle list.
   Verify: a W5 run drives the harness, not ad-hoc test code.
+- 2026-06-09 — **FINDING (OPEN — no fix yet; recorded per human request)** — `cp`-provider PATH
+  CORRUPTION on the first full Pi loop (`out/plat1`, platformer). The `cp` (cheap coding-plan) model
+  READS the correct project dir (`ls out/game/`, reads `out/game/spec/*`) but WRITES to a fabricated
+  sibling `out-game/` (the `/` dropped): W2 ran `cp -r templates/core/. …/out-game/`, `…platformer/src/.
+  …/out-game/src/`; across W2 events `out-game` appears 193× vs `out/game` 296×. Result: `spec/` lands
+  in `out/game/` but the entire scaffold+assets+build+verify lands in `out-game/`. The driver still
+  marks nodes `ok` because it stat()s the model-REPORTED `outputArtifacts` (`run.mjs:369`), which point
+  at `out-game/…` and exist → a SILENT FALSE-GREEN: the cross-node filesystem contract drifts
+  undetected. Secondary: every node logs `"no return JSON block parsed from pi output"` — the cheap
+  model under-complies with the forced-JSON return contract (driver falls back to artifact-existence).
+  Root cause = `cp` model fidelity (drops the `/`, skips the fenced ```json```), NOT the workflow
+  (prompts say `out/game` correctly). Proposed route (later pass, human-gated): a CHAIN guard
+  (`run.mjs`/`game-omni.js`) that REJECTS any reported `outputArtifact` not under `${PROJECT}/` → turns
+  the false-green into a loud, correct failure for ANY path drift; + a slash-free default `projectDir`
+  (nothing to corrupt); + preamble hardening (`cd` into an absolute project dir once, operate relative).
+  Evidence: `out/plat1/_pi/w2-scaffold.{events.jsonl,prompt.md}`, `out-game/` vs `out/game/spec/`.
+  Human decision: let the run finish, no re-run yet.
 - _(future flaws/fixes append here so repeat-flaws become visible and the next diagnosis starts ahead.)_
 
 ## Stewardship note
