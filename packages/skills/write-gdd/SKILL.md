@@ -131,6 +131,38 @@ _([repo] generate-gdd "every section maps to a tool input or code file"; ForgeDN
   placeholders). _([repo] generate-gdd Asset Registry; [Y] Chong-U index.json; [E] HuggingFace
   explicit asset list.)_
 
+### 3.5 Design the PLAYABLE SPACE (reachability · legibility · onboarding)
+
+> **A real player must be able to PLAY and WIN this — not just trigger mechanics in isolation.**
+> Filling entities/mechanics/controls is necessary but NOT sufficient: the parts must compose into
+> an experience a real player can actually complete via the documented `controls[]`. Before writing
+> milestones, decide three things and record them in `PLAN.md` (under a new `## Playability` heading):
+>
+> 1. **WIN-PATH (reachability).** Name the concrete path from the start state to
+>    `winCondition.observable`, expressed ONLY in the player's documented actions — there must EXIST
+>    a sequence of `controls[]` inputs that reaches the win. The goal/required affordances must sit
+>    **within the player's actual reach/ability** (a platformer goal reachable by the jump the player
+>    has; a grid goal reachable within `maxMoves`; a TD win survivable with the towers/gold the player
+>    starts with; a card win achievable from the opening hand). _Never encode a genre constant_ —
+>    encode the relation "objective reachable by the documented verb." There is **no soft-lock**:
+>    every required element is acquirable before it is needed. _([E] Sturgeon-MKIII "generate an
+>    example playthrough demonstrating completability… path from start to goal for a variety of
+>    player movement types"; [E] Level Design Book "critical path… the solution / the route to
+>    complete the level"; [Y] GMTK "build paths to guide them along it".)_
+> 2. **LEGIBILITY.** The player can perceive, before acting, **where the goal is, what is
+>    interactive, and what is a threat** — they are visually distinguishable from the background and
+>    from each other (the goal entity exists and is on-screen/locatable; interactables and hazards
+>    are distinct). Fold this into `assetList[]` descriptions + entity roles; do not invent a HUD the
+>    template lacks. _([E] gamedeveloper "6 elements of visual guidance" —
+>    signifiers/affordance/signal-to-noise/contrast; [R] r/gamedev "non-gamers weren't using half the
+>    game" until reactions were legible.)_
+> 3. **ONBOARDING (teach the verb safely).** M1 exercises `coreVerb` in a **safe, low-stakes**
+>    setting — the verb is usable and observable BEFORE any threat or fail-state (the "teach" beat).
+>    The first thing the player meets is the core action with no penalty, not the obstacle. _([E]
+>    GMTK 4-step "introduce the concept in a safe environment… so if you fall you don't lose a life";
+>    [E] Level Design Book "teach, test, twist" + "start slow and quiet"; [E] "Isolation Principle";
+>    [Y] Chong-U "gym level" with debug bounds — which catches the unreachable-platform bug directly.)_
+
 ---
 
 ## 4. DECOMPOSE INTO 2-5 PLAYABLE MILESTONES (default 3)
@@ -203,8 +235,22 @@ never engine internals):
    continuous quantities). _([repo] CCGS coding-standards "no random seeds, no time-dependent
    assertions"; [E] chongdashu "seed RNG, freeze time".)_
 4. **`describe` is the failure message** — write it as the human-readable predicate.
-5. **M1's assertion exercises the core verb.** The final milestone's assertions include the
-   win and/or lose `observable` from §3.
+5. **The win-path is asserted end-to-end, through the documented controls — not just per-mechanic
+   in isolation.** Beyond the per-mechanic assertions, the FINAL milestone MUST carry a
+   **REACHABILITY assertion**: fire the player's own `controls[]` (an `input.type:"event"` that
+   drives real held input toward the goal, or a bounded sequence of `keyHold`/`keyPress`/`click` the
+   player would actually use) and assert the win observable becomes true — e.g. `observe:"status",
+   expect:{equals:"won"}` (grid: also `moveCount atMost maxMoves`; TD: `lives atLeast 1` at win;
+   ui_heavy: `enemyHP atMost 0`). This proves a real player can WIN via the verb, not merely that the
+   verb moves a number. **It asserts OBSERVABLE state only and is satisfiable ONLY by a genuinely
+   completable level — it is un-fakeable (W5 §7) and de-hardcoded (it names the player's actions +
+   the win signal, never a genre constant like a jump height).** **M1 additionally asserts the core
+   verb is usable in the safe onboarding setting** (the verb's observable changes with no fail-state
+   triggered — the "teach" beat). When the goal/affordance the win-path needs cannot be reached by
+   the documented controls, the milestone is mis-scoped: fix the DESIGN (placement/reach in §3.5),
+   never weaken the assertion. _([E] Sturgeon-MKIII completability-by-playthrough; [E] Level Design
+   Book critical path; [repo] assertion-execution-grammar §2.4 `event` = "the event must happen for
+   real".)_
 6. Use only `input.key` values that appear in `controls[]`.
 
 **The `expect` comparators** (set exactly one): `decreases` / `increases` / `changes` /
@@ -330,6 +376,11 @@ spike resets the attempt."`, `coreVerb:"jump"`:
 This is a *shape* reference. A grid_logic or tower_defense prompt yields different entities,
 controls, observables (`moveCount`/`gold`/`lives`), and a different milestone count.
 
+> **Note (per §5 rule 5):** the assertions shown above check mechanics in isolation. A real GDD's
+> FINAL milestone must ALSO carry the §5 **reachability assertion** — fire the documented `controls[]`
+> toward the goal (here: a bounded run/jump sequence to the exit) and assert `status` becomes `"won"`
+> — so the spec proves a player can WIN the level via the verb, not just that the verb moves a number.
+
 ---
 
 ## 7. EDGE & FAILURE HANDLING
@@ -353,6 +404,11 @@ controls, observables (`moveCount`/`gold`/`lives`), and a different milestone co
   probably not observable — rewrite it as observable behavior (something that changes on
   `__GAME__`), or drop it. Every acceptance criterion MUST have an executable assertion. _([repo]
   task_validation 1:1.)_
+- **The win-path assertion can't be authored from the documented controls** (no sequence of
+  `controls[]` reaches `winCondition.observable`). The level is **unwinnable as designed** — that is
+  the bug Bucket 3 names. Re-place the goal/required affordances within the player's reach (§3.5
+  WIN-PATH); do NOT drop the assertion or relax `winCondition`. A level with no authorable win-path
+  must not ship.
 - **Game with no lose state** (e.g. an endless/sandbox toy). Set `loseCondition.description:
   "none"` and make the final milestone's end-state the win and/or a meaningful reset; the final
   milestone still must have a checkable end-state assertion.

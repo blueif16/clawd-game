@@ -157,6 +157,15 @@ build (you DO edit `main.ts`/`LEVEL_ORDER`/a shared Player) — but never add UN
   EXACTLY across `main.ts` / `LEVEL_ORDER` / the call site (cross-script consistency — §7.1).
 - **Reference asset KEYS** from `index.json` exactly (texture key = slot key). Never invent a key;
   never wait on the file's existence (Preloader placeholder-fills). _([repo] seed-protocol ASSET_KEY.)_
+- **Place entities to honor the GDD's WIN-PATH (`PLAN.md` §Playability) — build the reachable,
+  legible space, not scattered parts.** When you place the goal + required affordances, they must sit
+  within the player's actual reach/ability as the config defines it (jump arc from
+  `gravityY`/`jumpPower`; `maxMoves`; starting `gold`/towers; opening hand) and be visually
+  distinguishable (use the asset slots' roles). If, while building, the goal is **not reachable via
+  the documented controls**, that is a design soft-lock — record it in `MEMORY.md` as `[Mk]
+  reachability: <goal> unreachable via <verb> under <config>` for W1/W5; implement the nearest
+  faithful reachable placement, never fake the win. _([repo] Sturgeon-MKIII completability; W1 §3.5;
+  the Chong-U "gym level" debug-bounds practice exposes exactly this.)_
 
 ### 3.4 Avoid the known Phaser/AI-codegen pitfalls BY CONSTRUCTION
 > Source: `[R]` r/phaser (physics body/texture, body.reset, init() reset, overlap-on-global);
