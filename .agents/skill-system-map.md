@@ -136,9 +136,11 @@ session can retrace the evidence behind any edit. A claim with no doc on disk is
   (nothing to corrupt); + preamble hardening (`cd` into an absolute project dir once, operate relative).
   Evidence: `out/plat1/_pi/w2-scaffold.{events.jsonl,prompt.md}`, `out-game/` vs `out/game/spec/`.
   Human decision: let the run finish, no re-run yet.
-  — UPDATE 2026-06-09: the **false-green half is now closed** by the generic post-condition guard
-  (next log entry): a path-drifted / empty-output node halts `blocked` instead of silently `ok`.
-  The slash-free `projectDir` + per-game-folders + catalog `index.json` half of A1 remains OPEN.
+  — UPDATE 2026-06-09: the **false-green half is now closed** by the canonical OUTPUT CONTRACT layer
+  (`2eae034`; see entry below): a path-drifted node fails its `DRIVER-ARTIFACTS` hard gate (required file
+  missing under projectDir ⇒ `blocked`), and an out-of-lane reported write trips the `DRIVER-OWNS` warn.
+  The slash-free `projectDir` + per-game-folders + catalog `index.json` PROVISIONING half of A1 remains OPEN —
+  its natural home is a preflight/provisioning node + per-stage commits, which ALSO closes the W4 gap below.
 - 2026-06-09 — `pi-runner/{run,extract}.mjs` (generic engine) + `game-omni.js` (chain) — GENERIC node
   POST-CONDITION GUARD, killing the silent false-green class `plat1` surfaced. The chain now DECLARES
   each node's on-disk contract as data (`agent()` opts `produces:[projectDir-relative files]` /
@@ -152,6 +154,25 @@ session can retrace the evidence behind any edit. A claim with no doc on disk is
   still 10 stages; empirical proof deferred to the NEXT fresh-prompt run (never a plat1 rerun — avoids
   overfitting the fix to one game). Partially lands A1's "chain guard". Proven: `pi-runner/guard.test.mjs` (6/6).
   (commit: `3e94d7e` · skillsys(game-omni); doc: `docs/handoff-fix-pipeline-findings.md` §A1–A4 — the findings.)
+  — **SUPERSEDED 2026-06-09** by the canonical OUTPUT CONTRACT (`2eae034`, entry below): this ad-hoc
+  mechanism (`produces`/`mutates` opts + `guard.mjs` + an `extract.mjs` capture) was an engine DIVERGENCE;
+  replaced by the declared-marker contract + a byte-identical `run.mjs`. The one capability it had that the
+  canonical lacks (the W4 `mutates` "no-op" catch) is re-routed as a canonical upgrade (see the GAP below).
+- 2026-06-09 — `pi-runner/{run,extract}.mjs` (synced BYTE-IDENTICAL to the canonical skill template) +
+  `game-omni.js` (chain) — **Adopted the canonical OUTPUT CONTRACT (the 4th contract layer)**, superseding the
+  ad-hoc guard above. Native Claude validates the model's MESSAGE (description / `## Inputs`-`## Output` / schema),
+  never the FILESYSTEM — so `outputArtifacts` was a self-report. The contract closes that: `game-omni.js` declares
+  each node's on-disk contract ONCE via `contract({artifacts,owns})` → `DRIVER-ARTIFACTS:`/`DRIVER-OWNS:` prompt
+  markers; the generic `run.mjs` parses them and verifies the REQUIRED set independent of the self-report
+  (missing ⇒ `blocked` contract breach; out-of-lane reported write ⇒ `contract warn`). Engine synced
+  byte-identical (no per-repo divergence — the invariant the ad-hoc guard broke). De-hardcoded: declared as data
+  in the chain; the engine is game-agnostic. Catches W2 (missing `STRUCTURE.md`/`index.json`) + W3 (`out-game`
+  drift) as breaches. **GAP:** W4 has no fixed required artifact (game-specific scene filenames) ⇒ `DRIVER-OWNS`
+  only; the wrote-nothing HARD-catch is the canonical **per-stage-commit** roadmap (or a generic "owned dir
+  unchanged ⇒ breach" check) — ROUTED as a `transform-workflow-to-pi` upgrade, NOT re-added to our `run.mjs`.
+  Verify: byte-identical engine · `extract.mjs` 10 stages · markers render (DRIVER-ARTIFACTS×7 / DRIVER-OWNS×10) ·
+  zero residue. (commit: `2eae034` · skillsys(pi-runner); doc:
+  `~/.claude/skills/transform-workflow-to-pi/reference/artifact-contract.md` — the canonical spec.)
 - 2026-06-09 — `write-gdd/SKILL.md` (+ companion `implement-milestone/SKILL.md`) — **Bucket 3 (the quality
   break): no node DESIGNED for "can a real player play+win this".** plat1 shipped a level whose platforms
   exceeded the jump arc and whose goal needed no jumping, yet PASSED — assertions checked mechanics in
