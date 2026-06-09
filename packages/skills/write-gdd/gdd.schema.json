@@ -1,0 +1,223 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://game-omni/spec/gdd.schema.json",
+  "title": "W1 GDD artifact (slim gameDNA + milestones + runtime assertions)",
+  "description": "The single design artifact written by the W1 Spec node (spec/gdd.json). A slim, template-constrained subset of gameDNA plus the milestone plan that is the spine of W2/W4/W5. Authored by packages/skills/write-gdd/SKILL.md. Every field has exactly one downstream consumer.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "meta",
+    "entities",
+    "mechanics",
+    "controls",
+    "winCondition",
+    "loseCondition",
+    "assetList",
+    "milestones"
+  ],
+  "properties": {
+    "meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "archetype", "coreLoop", "coreVerb", "artStyle"],
+      "description": "Game identity. archetype/coreLoop/coreVerb are carried verbatim from classification.json; title is derived by W1.",
+      "properties": {
+        "title": { "type": "string", "minLength": 1, "description": "Short game title W1 derives from the prompt (<=6 words)." },
+        "archetype": {
+          "type": "string",
+          "enum": ["platformer", "top_down", "grid_logic", "tower_defense", "ui_heavy"],
+          "description": "Copied from classification.json. Routes W2 to templates/modules/<archetype>; constrains every mechanic/entity to that template's capabilities."
+        },
+        "coreLoop": { "type": "string", "minLength": 1, "description": "Copied from classification.json: the one-line loop W1 elaborates into milestones." },
+        "coreVerb": { "type": "string", "minLength": 1, "description": "Copied from classification.json: the single central player verb (drives M1)." },
+        "coreFantasy": { "type": "string", "description": "Optional emotional hook (from classification.json if present, else omit)." },
+        "artStyle": { "type": "string", "minLength": 1, "description": "Short art-direction note (e.g. 'pixel art, bright, side-view'). Feeds W3 asset generation; 'placeholder' is valid for v1." },
+        "physicsProfile": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Copied from classification.json. W2 sets engine/gameConfig params from this.",
+          "properties": {
+            "hasGravity": { "type": "boolean" },
+            "perspective": { "type": "string", "enum": ["side", "top_down", "none"] },
+            "movementType": { "type": "string", "enum": ["continuous", "grid", "path", "ui_only"] }
+          }
+        }
+      }
+    },
+    "subMode": {
+      "type": "string",
+      "description": "Optional within-archetype variant hint for W4 (e.g. grid_logic: 'puzzle'|'tactics'|'match'|'arcade'|'roguelike'; top_down: 'tilemap'|'arena'). Advisory in v1; omit if the base archetype suffices."
+    },
+    "entities": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Every game object the milestones reference. The player MUST be entity[0] (role:'player'). Each entity maps to a code file/behavior in W4 and (if it needs art) an asset slot in assetList.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "role", "description"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1, "description": "Stable identifier used by assertions and assetList (e.g. 'player', 'coin', 'spike', 'enemy_walker'). snake_case." },
+          "role": {
+            "type": "string",
+            "enum": ["player", "enemy", "obstacle", "collectible", "goal", "projectile", "tower", "ui"],
+            "description": "Functional role. Constrains which template behavior W4 composes onto it."
+          },
+          "description": { "type": "string", "minLength": 1, "description": "One line: what it is and what it does in the loop." },
+          "behaviors": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Template behaviors/capabilities to compose (e.g. ['PlatformerMovement','MeleeAttack'] or ['PatrolAI']). MUST name capabilities the chosen template provides — never invent. Omit for inert entities."
+          },
+          "assetSlot": { "type": "string", "description": "Key into assetList for this entity's sprite, if it needs art. Omit for code-drawn/placeholder entities." }
+        }
+      }
+    },
+    "mechanics": {
+      "type": "array",
+      "minItems": 1,
+      "description": "The named systems the game needs, each constrained to a template capability. Slim CustomMechanic shape (ForgeDNA). One mechanic per real interaction; respect the scope-cut (no mechanic the prompt+loop don't demand).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "description"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "description": "Mechanic name (e.g. 'jump', 'collect coin', 'push box', 'place tower')." },
+          "description": { "type": "string", "minLength": 1, "description": "Plain-language rule: what triggers it and what observable effect it has (the rule W4 implements and W5 may assert)." },
+          "capability": { "type": "string", "description": "The template behavior/hook this maps to (e.g. 'PlatformerMovement.jump', 'onEntityEnteredCell'). Optional until capabilities.md exists; when present, must exist in the template." }
+        }
+      }
+    },
+    "controls": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Input scheme (desktop keyboard/mouse only for v1). Each row is what an input does — and is the menu of inputs assertions may fire.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["input", "action"],
+        "properties": {
+          "input": { "type": "string", "minLength": 1, "description": "Key or button (e.g. 'ArrowLeft','ArrowRight','Space','ArrowUp','MouseClick'). Use DOM/Phaser key names so W5 can fire them." },
+          "action": { "type": "string", "minLength": 1, "description": "What the input does (e.g. 'move left','jump','place selected tower')." }
+        }
+      }
+    },
+    "winCondition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["description", "observable"],
+      "description": "How the player wins. 'observable' is the live-game-object signal that becomes the final milestone's win assertion.",
+      "properties": {
+        "description": { "type": "string", "minLength": 1, "description": "Plain language (e.g. 'reach the exit door', 'clear all boxes onto targets', 'survive all waves')." },
+        "observable": { "type": "string", "minLength": 1, "description": "The checkable signal on the game object, e.g. \"__GAME__.status === 'won'\" or \"__GAME__.score >= 100\"." }
+      }
+    },
+    "loseCondition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["description", "observable"],
+      "description": "How the player loses / the loop resets. 'observable' becomes the final milestone's lose assertion. If the game truly cannot be lost, set description to 'none' and observable to the reset signal instead.",
+      "properties": {
+        "description": { "type": "string", "minLength": 1 },
+        "observable": { "type": "string", "minLength": 1, "description": "e.g. \"__GAME__.status === 'lost'\" or \"__GAME__.player.health <= 0\" or \"__GAME__.lives === 0\"." }
+      }
+    },
+    "config": {
+      "type": "object",
+      "description": "Tuning numbers W2 merges into the template gameConfig.json (flat key->number; W2 wraps in {value:X}). Only game-specific values; never screenSize/debugConfig/renderConfig. Keys must match the archetype's config schema (e.g. platformer: gravityY,jumpPower,walkSpeed; grid_logic: cellSize,maxMoves; tower_defense: startingGold,startingLives).",
+      "additionalProperties": { "type": "number" }
+    },
+    "assetList": {
+      "type": "array",
+      "description": "The art/audio the game needs, as slots. Becomes W2's index.json slots and W3's generation list. Empty array is valid (W3 fills placeholders).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["slot", "type", "description"],
+        "properties": {
+          "slot": { "type": "string", "minLength": 1, "description": "Slot key, referenced by entities[].assetSlot (e.g. 'player','coin','tile_ground','bg_level','sfx_jump')." },
+          "type": {
+            "type": "string",
+            "enum": ["sprite", "animation", "tileset", "background", "image", "audio"],
+            "description": "Asset kind. Drives W3 generation params and W2 index.json dims."
+          },
+          "description": { "type": "string", "minLength": 1, "description": "Generation prompt: what it depicts + view direction (e.g. 'side-view hero facing right', 'top-down coin', 'tileable grass background'). Archetype-conditioned (platformer=side-view; top_down/grid/TD=top-down; ui_heavy=front bust)." },
+          "frames": { "type": "array", "items": { "type": "string" }, "description": "For type:'animation' — frame names (e.g. ['idle','run','jump']). Omit otherwise." },
+          "width": { "type": "integer", "minimum": 1, "description": "Optional pixel width hint for W2 index.json." },
+          "height": { "type": "integer", "minimum": 1, "description": "Optional pixel height hint." }
+        }
+      }
+    },
+    "milestones": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 5,
+      "description": "The spine: 2-5 PLAYABLE vertical slices (default 3), in build order. INVARIANTS: milestones[0] (M1) = the core loop playable ('it plays at all'); the LAST milestone includes an end-state (win and/or lose). Each is a runnable checkpoint with acceptance criteria + executable runtime assertions. Sized to the post-scope-cut design; overflow goes back to scope-cut, the list never exceeds 5.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "goal", "acceptanceCriteria", "assertions"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^M[1-9][0-9]*$", "description": "Milestone id 'M1','M2',... in build order. M1 is the core loop." },
+          "name": { "type": "string", "minLength": 1, "description": "Short outcome name (e.g. 'Move and jump', 'Collect + hazards', 'Win/lose + restart')." },
+          "goal": { "type": "string", "minLength": 1, "description": "The PLAYABLE outcome: 'at the end of this, the game runs and the player can <do X>'. An outcome, not a task." },
+          "acceptanceCriteria": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1 },
+            "description": "The definition of done for this slice, as human-readable checkable bullets (1:1 with assertions). Each must be observable behavior, never an implementation detail."
+          },
+          "assertions": {
+            "type": "array",
+            "minItems": 1,
+            "description": "Executable runtime checks W5 runs headless against window.__GAME__ after firing input. 1:1 with acceptanceCriteria. Each: setup -> input -> observe -> expect (the Given/When/Then of a game test).",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "describe", "observe", "expect"],
+              "properties": {
+                "id": { "type": "string", "pattern": "^M[1-9][0-9]*-A[1-9][0-9]*$", "description": "Assertion id '<milestoneId>-A<n>' (e.g. 'M1-A1')." },
+                "describe": { "type": "string", "minLength": 1, "description": "Human-readable predicate = the failure message (e.g. 'pressing Up decreases player.y within 300ms')." },
+                "setup": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "description": "GIVEN — optional precondition before input. Omit if the fresh scene already satisfies it.",
+                  "properties": {
+                    "scene": { "type": "string", "description": "Scene/level to boot if not the default." },
+                    "state": { "type": "object", "description": "Field->value mutations to apply on __GAME__ before the input (e.g. {\"player.health\": 1}). Use sparingly; prefer natural state." }
+                  }
+                },
+                "input": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "description": "WHEN — the synthetic input/event to fire. Omit for at-scene-start checks (then this is a pure observe).",
+                  "properties": {
+                    "type": { "type": "string", "enum": ["keyPress", "keyHold", "click", "event", "none"], "description": "Input kind W5 dispatches." },
+                    "key": { "type": "string", "description": "For keyPress/keyHold: DOM/Phaser key name (e.g. 'ArrowUp','Space'). Must appear in controls[]." },
+                    "durationMs": { "type": "integer", "minimum": 0, "description": "For keyHold: how long to hold before observing (e.g. 300)." },
+                    "target": { "type": "string", "description": "For click/event: the entity id or event name (e.g. 'coin', 'overlap:player,coin')." }
+                  }
+                },
+                "observe": { "type": "string", "minLength": 1, "description": "THEN — the observable on the live game object to read (e.g. 'player.y', 'score', 'entities.count(type==enemy)', 'status'). Reads __GAME__ accessors only, never engine internals." },
+                "expect": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "description": "The expected change/value of `observe`. Exactly one comparator key set.",
+                  "properties": {
+                    "decreases": { "type": "boolean", "description": "observe value is lower after input than before." },
+                    "increases": { "type": "boolean", "description": "observe value is higher after input than before." },
+                    "changes": { "type": "boolean", "description": "observe value differs after input (direction-agnostic)." },
+                    "unchanged": { "type": "boolean", "description": "observe value is the same after input." },
+                    "equals": { "description": "observe value strictly equals this (number|string|boolean)." },
+                    "atLeast": { "type": "number", "description": "observe value >= this." },
+                    "atMost": { "type": "number", "description": "observe value <= this." }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

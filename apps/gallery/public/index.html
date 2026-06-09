@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Index of Synthetic Games — game·omni</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,100..900,0..100,0..1;1,9..144,100..900,0..100,0..1&family=Newsreader:ital,opsz,wght@0,6..72,400..600;1,6..72,400..500&family=Spline+Sans+Mono:wght@400..600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+  <div class="crop" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+
+  <!-- ── masthead ─────────────────────────────────────────────────────── -->
+  <header class="masthead">
+    <div class="edition" id="edition"><!-- registry · date · code (app.js) --></div>
+    <div class="masthead-main">
+      <h1 class="title">Index of <em>Synthetic</em> Games</h1>
+      <div class="stat" id="stat"><!-- count + change vs prior edition (app.js) --></div>
+    </div>
+    <p class="subtitle">A living catalogue of machine‑authored playable specimens — re‑drawn each pass of the engine.</p>
+  </header>
+
+  <main class="catalogue">
+    <!-- ── left margin: the index of specimens (the gallery rail) ──────── -->
+    <aside class="index" id="index" aria-label="index of specimens"></aside>
+
+    <!-- ── the featured spread: plate on top, record beneath ──────────── -->
+    <div class="spread">
+      <section class="plate" id="plate" aria-live="polite"></section>
+      <section class="record" id="record"></section>
+    </div>
+  </main>
+
+  <!-- empty state -->
+  <template id="tpl-empty">
+    <div class="empty">
+      <div class="empty-plate"><span>no specimens catalogued</span></div>
+      <p>Run the <code>game-omni</code> pass. Every game folder — anything carrying
+      <code>spec/classification.json</code> — is catalogued here automatically, newest first.</p>
+      <p class="faint">reading <code id="empty-dir"></code></p>
+    </div>
+  </template>
+
+  <script src="app.js" type="module"></script>
+</body>
+</html>

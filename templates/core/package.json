@@ -1,0 +1,20 @@
+{
+  "name": "game-omni-template",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --port 4173 --strictPort"
+  },
+  "dependencies": {
+    "phaser": "3.90.0",
+    "phaser3-rex-plugins": "^1.80.16"
+  },
+  "devDependencies": {
+    "typescript": "~5.8.3",
+    "vite": "^6.2.6"
+  }
+}

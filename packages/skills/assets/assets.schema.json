@@ -1,0 +1,108 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://game-omni/assets.schema.json",
+  "title": "W3 ASSETS.md manifest (produced-asset manifest)",
+  "description": "The structured shape of the ASSETS.md manifest written by the W3 Assets node (<project>/ASSETS.md). ASSETS.md is a human-readable Markdown file authored by packages/skills/assets/SKILL.md §6b; this schema commits the structured data it carries (a manifest table + header), so the format is machine-checkable and stable for W4/W5 grounding. RELATIONSHIP: index.json = the REQUESTED slots (written by W2); ASSETS.md = the PRODUCED assets (written by W3). They are kept consistent — every generated/placeholder slot appears in both. ASSETS.md never re-declares the slot keys/dims authoritatively (index.json owns those); it records what was produced per slot + provenance. This schema describes the data model; the on-disk artifact is Markdown rendering exactly these fields.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["title", "mode", "slotCount", "assetsDir", "rows"],
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "gdd.meta.title — the manifest heading."
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["placeholder", "gemini"],
+      "description": "The mode W3 ran in. 'placeholder' is the v1 default; 'gemini' is the toggle. Even in gemini mode, individual slots may be 'placeholder' (per-slot graceful degradation)."
+    },
+    "model": {
+      "type": "string",
+      "description": "The image model used in gemini mode (e.g. 'gemini-2.5-flash-image'). 'n/a' / omit in placeholder mode."
+    },
+    "artStyle": {
+      "type": "string",
+      "description": "gdd.meta.artStyle — the global style anchor fed into prompts ('placeholder' is valid)."
+    },
+    "degradedReason": {
+      "type": "string",
+      "description": "Present only if gemini was requested but the run (or specific slots) fell back to placeholder. The one-line reason (no key, sharp missing, generation blocked, etc.). Mirrored in MEMORY.md."
+    },
+    "slotCount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "generated", "placeholder", "pending"],
+      "description": "Slot tally — must sum to total. 'pending' counts slots W3 left for the template Preloader to placeholder-fill (a safe state, not a failure).",
+      "properties": {
+        "total": { "type": "integer", "minimum": 0 },
+        "generated": { "type": "integer", "minimum": 0, "description": "Real assets produced (gemini mode successes)." },
+        "placeholder": { "type": "integer", "minimum": 0, "description": "Greybox assets written by W3." },
+        "pending": { "type": "integer", "minimum": 0, "description": "Left for the Preloader to fill (no W3 file on disk)." }
+      }
+    },
+    "assetsDir": {
+      "type": "string",
+      "default": "public/assets",
+      "description": "Mirror of index.json.assetsDir — where all row paths resolve."
+    },
+    "rows": {
+      "type": "array",
+      "description": "One row per index.json slot W3 addressed. Empty array is valid (index.json had slots:[] — the game boots on programmatic shapes; ASSETS.md still records the empty case in notes).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["slot", "type", "status", "mode"],
+        "properties": {
+          "slot": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The slot KEY = the Phaser texture key (copied from index.json.slots[].slot; NEVER altered by W3)."
+          },
+          "type": {
+            "type": "string",
+            "enum": ["sprite", "animation", "tileset", "background", "image", "audio"],
+            "description": "Asset kind (from index.json). Determines the loader call (see loaderHint)."
+          },
+          "path": {
+            "type": "string",
+            "description": "assetsDir-relative path of the file W3 wrote (e.g. 'sprites/player.png'). Empty/omitted only when status is 'pending' (no file on disk; Preloader fills it)."
+          },
+          "width": { "type": "integer", "minimum": 1, "description": "Produced pixel width (a single animation frame's width for type:'animation')." },
+          "height": { "type": "integer", "minimum": 1, "description": "Produced pixel height." },
+          "frames": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "For type:'animation' — the ordered frame names (from index.json). The on-disk sheet has frames.length uniform cells of width×height."
+          },
+          "status": {
+            "type": "string",
+            "enum": ["generated", "placeholder", "pending"],
+            "description": "Must match the slot's status written back into index.json. 'generated' = real asset; 'placeholder' = greybox file on disk; 'pending' = no W3 file, Preloader will fill."
+          },
+          "mode": {
+            "type": "string",
+            "enum": ["placeholder", "gemini"],
+            "description": "How THIS slot was produced (may differ from the run mode for degraded slots)."
+          },
+          "technique": {
+            "type": "string",
+            "description": "Provenance: e.g. 'gemini-2.5-flash-image + chroma-key + trim', 'greybox rect+label (gold)', 'flat tile (POT)', '6-frame labelled strip', 'silent wav', 'Preloader generateTexture'."
+          },
+          "description": {
+            "type": "string",
+            "description": "The generation prompt/intent (from index.json.slots[].description or the entity fallback)."
+          },
+          "loaderHint": {
+            "type": "string",
+            "description": "The Phaser loader call the Preloader uses for this key, e.g. \"load.image('player','sprites/player.png')\" or \"load.spritesheet('run','sprites/run.png',{frameWidth:64,frameHeight:64})\". Advisory grounding for W4/W5; the Preloader is template-owned."
+          }
+        }
+      }
+    },
+    "notes": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Free-form notes: failed/oversized generations + reason, pixel-snap applied, empty-slots case, degradation, anything mirrored in MEMORY.md."
+    }
+  }
+}

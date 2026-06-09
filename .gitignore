@@ -1,0 +1,26 @@
+# ── dependencies ────────────────────────────────────────────────────────────
+node_modules/
+
+# ── build outputs ───────────────────────────────────────────────────────────
+dist/
+build/
+*.tsbuildinfo
+
+# ── run outputs (regenerable; actively written by pi-runner) ─────────────────
+out/
+out-game/
+
+# ── vendored reference snapshots ────────────────────────────────────────────
+# 9 donor repos, ~128M, each with its own nested .git (would become broken
+# gitlinks). Read-only provenance for the skills — kept on disk, not tracked.
+reference-repos/
+
+# ── secrets / local env ─────────────────────────────────────────────────────
+.env
+.env.local
+*.local
+
+# ── OS / editor cruft ───────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.log

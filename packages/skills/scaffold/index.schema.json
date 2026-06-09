@@ -1,0 +1,75 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://game-omni/index.schema.json",
+  "title": "W2 index.json (asset slot manifest)",
+  "description": "The asset slot manifest written by the W2 Scaffold node (<project>/index.json). The engine-agnostic single source of truth for asset keys + dimensions, derived from gdd.assetList[] UNION gdd.entities[].assetSlot. W3 reads it to know what to generate and writes back `path`+`status`; W4 and the Preloader read it for the canonical key<->dims map so nobody re-scans public/. Distinct from any per-atlas Phaser JSON-Hash frame file. Authored by packages/skills/scaffold/SKILL.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["archetype", "assetsDir", "slots"],
+  "properties": {
+    "archetype": {
+      "type": "string",
+      "enum": ["platformer", "top_down", "grid_logic", "tower_defense", "ui_heavy"],
+      "description": "Copied from gdd.meta.archetype. Lets W3 apply archetype-conditioned generation rules (side-view vs top-down vs front-bust)."
+    },
+    "assetsDir": {
+      "type": "string",
+      "description": "Project-relative dir where assets live and slot `path`s resolve, served as-is by Vite. Default 'public/assets'.",
+      "default": "public/assets"
+    },
+    "slots": {
+      "type": "array",
+      "description": "One row per asset slot. Derived from gdd.assetList[] (one slot each) UNION any gdd.entities[].assetSlot not already covered. Empty array is valid (no art needed yet). Each slot key becomes a Phaser texture key.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["slot", "type", "path", "width", "height", "status"],
+        "properties": {
+          "slot": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Slot key = the Phaser texture key. From gdd.assetList[].slot or gdd.entities[].assetSlot (e.g. 'player','coin','tile_ground','bg_level'). snake_case, unique."
+          },
+          "type": {
+            "type": "string",
+            "enum": ["sprite", "animation", "tileset", "background", "image", "audio"],
+            "description": "Asset kind. Carried from gdd.assetList[].type; entity-derived slots with no assetList row default to 'sprite'. Drives W3 generation + the Preloader load call (load.image/load.spritesheet/load.atlas/load.audio)."
+          },
+          "path": {
+            "type": "string",
+            "description": "assetsDir-relative file path the loader uses (e.g. 'sprites/player.png'). W2 fills a conventional default path; W3 confirms/overwrites it when it writes the file. Empty string until generated."
+          },
+          "width": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Pixel width. From gdd.assetList[].width if present, else an archetype default (a HINT W3 may refine and write back)."
+          },
+          "height": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Pixel height (same sourcing as width)."
+          },
+          "frames": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "For type:'animation' — ordered frame names (from gdd.assetList[].frames, e.g. ['idle','run','jump']). Omit for non-animations."
+          },
+          "entityIds": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "The gdd.entities[].id values that reference this slot via assetSlot (provenance; helps W3 prompt and W4 wire). Omit for non-entity slots (backgrounds, tiles, sfx)."
+          },
+          "description": {
+            "type": "string",
+            "description": "The generation prompt carried from gdd.assetList[].description (what it depicts + view direction). W3's primary input. Omit only for entity-derived slots with no assetList row (W3 falls back to the entity description)."
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "placeholder", "generated"],
+            "description": "Lifecycle. W2 writes 'pending'. The template Preloader renders a colored-rect placeholder for any non-'generated' slot so the game boots with zero art. W3 sets 'generated' (or 'placeholder' in placeholder-only mode) after writing the file."
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,84 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://game-omni/spec/classification.schema.json",
+  "title": "W0 Classification artifact",
+  "description": "The single artifact written by the W0 Classify node (spec/classification.json). Routes the whole game-omni pipeline: physics-first archetype, one-line core loop, and explicit scope-cut. Authored by packages/skills/classify-game/SKILL.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "prompt",
+    "archetype",
+    "coreLoop",
+    "coreVerb",
+    "physicsProfile",
+    "reasoning",
+    "confidence",
+    "scopeCut"
+  ],
+  "properties": {
+    "prompt": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The raw args.prompt, copied verbatim. Provenance for every downstream node."
+    },
+    "archetype": {
+      "type": "string",
+      "enum": ["platformer", "top_down", "grid_logic", "tower_defense", "ui_heavy"],
+      "description": "Physics-first routing key. W2 scaffolds templates/modules/<archetype>. Closed set — never invented."
+    },
+    "coreLoop": {
+      "type": "string",
+      "minLength": 1,
+      "description": "One self-enclosed sentence: player verb + goal/win + obstacle + fail/reset. The spine W1 elaborates and the seed for W1 win/lose."
+    },
+    "coreVerb": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The single central player verb (e.g. jump, push, place tower)."
+    },
+    "physicsProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hasGravity", "perspective", "movementType"],
+      "description": "The structured physics that justifies the archetype (auditable, drives W2 engine params).",
+      "properties": {
+        "hasGravity": {
+          "type": "boolean",
+          "description": "True essentially only for platformer."
+        },
+        "perspective": {
+          "type": "string",
+          "enum": ["side", "top_down", "none"]
+        },
+        "movementType": {
+          "type": "string",
+          "enum": ["continuous", "grid", "path", "ui_only"]
+        }
+      }
+    },
+    "reasoning": {
+      "type": "string",
+      "minLength": 1,
+      "description": "1-2 sentences: which physics KEY QUESTION decided the archetype. On low confidence, names the ambiguity / runner-up."
+    },
+    "confidence": {
+      "type": "string",
+      "enum": ["high", "medium", "low"],
+      "description": "high = unambiguous; medium = resolved via tie-break; low = barely fit / defaulted (see SKILL §5)."
+    },
+    "scopeCut": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "What is deliberately OUT of v1 (4-8 entries recommended). The anti-slop guardrail; downstream treats these as out-of-bounds. Names systems, not one-off named features. Never cuts game-feel/juice."
+    },
+    "coreFantasy": {
+      "type": "string",
+      "description": "Optional <=8-word emotional hook. Helps W1 + W3. Omit if not obvious."
+    },
+    "lowConfidence": {
+      "type": "boolean",
+      "description": "Optional convenience boolean mirroring confidence=='low'. The canonical signal is the confidence enum; emit this only if a consumer wants a plain boolean."
+    }
+  }
+}

@@ -1,0 +1,120 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://game-omni/verify/report.schema.json",
+  "title": "W5 Verify report artifact (verify/report.json)",
+  "description": "The proof-of-work the W5 Verify+Fix node writes for ONE milestone. Written by packages/skills/verify/SKILL.md after booting the built game headless, executing the milestone's assertions against window.__GAME__, running the bounded <=3 self-fix on failure, and emitting the VALIDATION_PASSED/FAILED marker. Read by the orchestrator (the binary marker is the gate) and by a human (per-assertion observed-vs-expected, screenshots, fix trail). One report.json per milestone-verify; the workflow may keep a per-milestone file (verify/report.M2.json) or overwrite verify/report.json per stage. Evidence: research/skills/w5-verify-research.md synthesis #10.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["milestoneId", "marker", "passed", "summary", "assertions", "buildHealth", "fixCycles", "advisoryVlm", "screenshots", "startedAt"],
+  "properties": {
+    "milestoneId": {
+      "type": "string",
+      "pattern": "^M[1-9][0-9]*$",
+      "description": "The milestone this report verifies (e.g. 'M2'). 1 milestone <-> 1 report <-> 1 marker."
+    },
+    "marker": {
+      "type": "string",
+      "enum": ["VALIDATION_PASSED", "VALIDATION_FAILED"],
+      "description": "The verbatim marker emitted to stdout and parsed by the orchestrator. PASSED iff every assertion passed AND the game booted/became ready with no fatal console error. A crash / never-ready / missing marker is FAILED. This is the binary gate; nothing else blocks it."
+    },
+    "passed": {
+      "type": "boolean",
+      "description": "marker === 'VALIDATION_PASSED'. Redundant convenience field for non-string consumers."
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "description": "One-line human summary, also the marker's trailing message. PASSED: '<id> all N assertions passed'. FAILED: the joined failed-assertion describes (the gamedevbench '; '-joined issues)."
+    },
+    "assertions": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Per-assertion result, 1:1 with the milestone's gdd assertions (which are 1:1 with acceptanceCriteria). EVERY assertion runs (single-aggregate, not fail-fast), so a human sees all failures at once. These mechanic assertions are AUTHORITATIVE: any 'fail' here forces marker=FAILED.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "describe", "observe", "comparator", "expected", "observed", "status"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^M[1-9][0-9]*-A[1-9][0-9]*$", "description": "The gdd assertion id (e.g. 'M2-A1')." },
+          "describe": { "type": "string", "minLength": 1, "description": "The gdd assertion's human-readable predicate = its failure message (e.g. 'pressing Up decreases player.y within 300ms')." },
+          "observe": { "type": "string", "minLength": 1, "description": "The observe expression evaluated against __GAME__ (e.g. 'player.y', 'score', 'entities.count(type==enemy)', 'status')." },
+          "comparator": { "type": "string", "enum": ["decreases", "increases", "changes", "unchanged", "equals", "atLeast", "atMost"], "description": "The single gdd 'expect' comparator key that was set." },
+          "expected": { "description": "The comparator's expected value/direction. For relative comparators (decreases/increases/changes/unchanged) this is the boolean direction; for equals/atLeast/atMost it is the target number|string|boolean." },
+          "observed": { "description": "What W5 actually read off __GAME__ after firing the input. For relative comparators, an object {before, after}. null if the observe path was missing/undefined on the hook." },
+          "status": { "type": "string", "enum": ["pass", "fail", "error"], "description": "'pass' = comparator satisfied; 'fail' = comparator not satisfied on a clean read; 'error' = the observe path was missing on __GAME__, the input couldn't be fired, or a read threw (treated as fail for the marker, recorded distinctly for diagnosis)." },
+          "message": { "type": "string", "description": "On fail/error: the diagnostic (e.g. 'expected player.y to decrease; before=300 after=300 (unchanged)' or 'observe path player.dashCount not present on __GAME__'). Omitted on pass." },
+          "screenshot": { "type": "string", "description": "Optional path to a screenshot captured at this assertion's check point (relative to the project dir)." }
+        }
+      }
+    },
+    "buildHealth": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["greenOnEntry"],
+      "description": "Build-health context. W4 guarantees a green build on entry (it is W4's pre-gate, not W5's). W5 only re-runs the build if a self-fix EDITS src/** (a fix that breaks the build is a failed fix cycle).",
+      "properties": {
+        "greenOnEntry": { "type": "boolean", "description": "Was 'npm run build' green when W5 received the milestone (W4's guarantee). If false, W5 records it and proceeds to runtime verify only if the prior build artifact boots; a non-building project should not reach W5." },
+        "rebuiltAfterFix": { "type": "boolean", "description": "Did W5 re-run 'npm run build' because a self-fix edited src/**?" },
+        "greenAfterFix": { "type": "boolean", "description": "Result of the post-fix build re-check (omit if no fix edited src/**). A red post-fix build is a failed fix cycle." }
+      }
+    },
+    "fixCycles": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 3,
+      "description": "Number of bounded self-fix cycles run (0 = passed first try, the happy path an extractor records). Capped at 3."
+    },
+    "fixEdits": {
+      "type": "array",
+      "description": "The src/** edits each fix cycle made, for audit + anti-reward-hack review. Empty when fixCycles=0.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["cycle", "files", "rationale"],
+        "properties": {
+          "cycle": { "type": "integer", "minimum": 1, "maximum": 3 },
+          "files": { "type": "array", "items": { "type": "string" }, "description": "src/** files edited this cycle. MUST be under src/** game code only; NEVER spec/gdd.json, the assertions, or the __GAME__ hook adapter (anti-reward-hack: the oracle is outside the fix edit set)." },
+          "rationale": { "type": "string", "description": "The real-behavior root cause fixed (e.g. 'ArrowUp was not wired to PlatformerMovement.jump() -> wired it'; 'score was a scene field, not registry.set -> wrote to registry')." }
+        }
+      }
+    },
+    "fixOutcome": {
+      "type": "string",
+      "enum": ["passed_first_try", "fixed", "exhausted", "stalled", "boot_failed"],
+      "description": "How the verify resolved. passed_first_try (fixCycles=0); fixed (a cycle made all assertions pass); exhausted (3 cycles, still failing); stalled (same failure signature repeated -> stopped early); boot_failed (never became ready / fatal console error -> did not burn fix cycles)."
+    },
+    "advisoryVlm": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ran", "flag"],
+      "description": "The ADVISORY screenshot review. NEVER blocks the marker in v1 (VLM precision ~0.50; deterministic mechanic assertions are the authority). Records a triage signal only.",
+      "properties": {
+        "ran": { "type": "boolean", "description": "Was a VLM review run? May be false (v1 leaves it optional)." },
+        "flag": { "type": "string", "enum": ["looks_right", "looks_off", "inconclusive", "skipped"], "description": "Coarse 3-value advisory flag (VLMs can rank but not score). 'looks_off' is a TRIAGE hint for a human, never a marker gate." },
+        "canvasNotBlank": { "type": "boolean", "description": "The cheap deterministic 'canvas has content' check (toDataURL().length > 1000). A blank canvas with passing assertions is a notable advisory signal (the hook may be true while nothing renders)." },
+        "note": { "type": "string", "description": "The VLM's one-line rationale, if any." }
+      }
+    },
+    "regression": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Pass-to-pass guard: because milestones build cumulatively, after a self-fix W5 re-checks that prior milestones' assertions still pass (SWE-bench PASS_TO_PASS; MobileGym unexpected-side-effects). Omitted if no fix edited src/**.",
+      "properties": {
+        "priorMilestonesChecked": { "type": "array", "items": { "type": "string", "pattern": "^M[1-9][0-9]*$" }, "description": "Prior milestone ids whose assertions were re-run after the fix." },
+        "broke": { "type": "array", "items": { "type": "string" }, "description": "Prior assertion ids that NOW fail after this milestone's fix (a regression the fix introduced). Empty = no regression. A non-empty list is a real problem recorded for the orchestrator/human." }
+      }
+    },
+    "screenshots": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Paths (relative to the project dir) of screenshots captured: at least one at the milestone's end state, plus one per failure. Used by a human and by the advisory VLM."
+    },
+    "consoleErrors": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Console errors + uncaught pageerrors captured during boot/run. A fatal error during boot is a boot_failed fail-fast. Fed to the fix step."
+    },
+    "durationMs": { "type": "integer", "minimum": 0, "description": "Wall-clock duration of the whole milestone verify (boot + assertions + any fix cycles)." },
+    "startedAt": { "type": "string", "description": "ISO-8601 timestamp when this milestone verify started." }
+  }
+}

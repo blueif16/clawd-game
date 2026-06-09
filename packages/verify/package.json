@@ -1,0 +1,22 @@
+{
+  "name": "@game-omni/verify",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "W5 verify harness — the general interpreter that boots a built Phaser game headless, compiles each gdd milestone assertion (setup->input->observe->expect) into Playwright actions, evaluates the observe grammar off window.__GAME__, and emits the VALIDATION_PASSED/FAILED marker. Conforms to packages/skills/verify/assertion-execution-grammar.md §5.",
+  "bin": {
+    "verify-milestone": "./bin/verify-milestone.ts"
+  },
+  "scripts": {
+    "verify-milestone": "tsx bin/verify-milestone.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "playwright": "1.56.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "~5.8.3"
+  }
+}
