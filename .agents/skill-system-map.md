@@ -18,27 +18,36 @@ node's ACTUAL committed artifact, never an assumed contract.
 - **Pi-portable** via `transform-workflow-to-pi` (Claude proves it; Pi runs the identical prompts).
   Sanity-check the realized DAG with:
   `node ~/.claude/skills/transform-workflow-to-pi/templates/pi-runner/extract.mjs .claude/workflows/game-omni.js`
-  → 10 stages: W0,W1,W2,W3, then 3×(W4,W5) for the Pi-safe **static default of 3 milestones**.
+  → **11 stages**: W0,W1,VERIFY-1,W2,W3, then 3×(W4 Execute, VERIFY-2) for the Pi-safe **static default of 3 milestones**.
 - **Hermes rule (the one global precedence):** improve a wave by editing its SKILL; improve the **chain**
   (ordering, hand-offs, wiring) by editing **game-omni.js**.
 
 ## The nodes / waves, in order — and the wiring (which node relies on what)
-Runtime spine: `W0 → W1 → W2 → W3 → (per milestone: W4 → W5)`. All six are wired and extract clean.
+Runtime spine (7 nodes — **separation of powers**, the 2026-06-10 redesign: a DESIGN gate BEFORE code, a QA
+gate AFTER): `W0 → W1 → VERIFY-1 → W2 → W3 → (per milestone: W4 Execute → VERIFY-2)`. All seven are wired and
+extract clean (11 stages). **Why split:** the old single W5 was graded through state the implementer itself
+populated ("student grades its own homework") AND it conflated *is-the-design-good* with *is-the-code-correct*.
+VERIFY-1 owns GAMENESS (static, pre-code); VERIFY-2 owns IMPLEMENTATION FIDELITY (post-build, never re-judges
+gameness); W4 EXECUTE has zero design latitude in between. The human is steward, **not** a runtime gate.
 
 | Node | Role | Skill it loads | Reads (upstream artifacts) | Writes (downstream artifacts) | Structured return |
 |---|---|---|---|---|---|
 | **W0 Classify** | Designer | `packages/skills/classify-game/SKILL.md` (+`classification.schema.json`) | `args.prompt` | `spec/classification.json` (archetype · coreLoop · coreVerb · physicsProfile · **scopeCut**) | the classification |
-| **W1 Spec** | Designer | `packages/skills/write-gdd/SKILL.md` (+`gdd.schema.json`) | `spec/classification.json` | `spec/gdd.json` (slim gameDNA + **2–5 milestones**, each with **runtime assertions**) + `spec/PLAN.md` | the gdd |
-| **W2 Scaffold** | Coder | `packages/skills/scaffold/SKILL.md` (+`template-contract.md`, `index.schema.json`) | `spec/gdd.json` | empty building project + `STRUCTURE.md` + `index.json` (asset slots); exposes **`window.__GAME__`** | status receipt |
-| **W3 Assets** | Artist | `packages/skills/assets/SKILL.md` (+`assets.schema.json`) | `index.json` + `spec/gdd.json` (art style) | `public/assets/*` + `ASSETS.md`; writes back `index.json` path+status | status receipt |
-| **W4 Implement** | Coder | `packages/skills/implement-milestone/SKILL.md` | one `gdd` milestone + `STRUCTURE.md` + `MEMORY.md` + `index.json` keys + `template-contract.md` | `src/**` game code; ticks `STRUCTURE.md`; appends `MEMORY.md`; **populates `window.__GAME__` for real** | built/failed |
-| **W5 Verify+Fix** | Playtester | `packages/skills/verify/SKILL.md` (+`assertion-execution-grammar.md`, `report.schema.json`) | the built game + that milestone's `gdd` assertions + `window.__GAME__` + `MEMORY.md` | `verify/report.json` + screenshots; bounded ≤3 self-fix edits `src/**` | `VALIDATION_PASSED/FAILED` marker |
+| **W1 Spec** | Designer | `packages/skills/write-gdd/SKILL.md` (+`gdd.schema.json`) | `spec/classification.json` | `spec/gdd.json` (slim gameDNA + **2–5 milestones** + per-milestone assertions; the design THESIS that VERIFY-1 hardens) + `spec/PLAN.md` | the gdd |
+| **VERIFY-1 Design** | Design Critic (pre-code, static) | `packages/skills/verify-design/SKILL.md` (+`blueprint.schema.json` — TODO) | `spec/gdd.json` + `spec/classification.json` + `spec/PLAN.md` | **`spec/blueprint.json`** — the HARDENED, frozen, winnable design, the **NEW single source of truth**: complete `config` · concrete `layout` (coords+routes+timings) · `coupling` (threat-on-reward-path, proven) · `referenceSolution` · Given/When/Then `acceptanceCriteria` · `declaredRanges` (perturbation envelope) · `verdict` — plus `spec/DESIGN_REVIEW.md` | the blueprint + `verdict.result` |
+| **W2 Scaffold** | Coder | `packages/skills/scaffold/SKILL.md` (+`template-contract.md`, `index.schema.json`) | **`spec/blueprint.json`** (`.config` is COMPLETE — fixes the config-drop class) | empty building project + `STRUCTURE.md` + `index.json` (asset slots); exposes **`window.__GAME__`** | status receipt |
+| **W3 Assets** | Artist | `packages/skills/assets/SKILL.md` (+`assets.schema.json`) | `index.json` + `spec/blueprint.json` (art style) | `public/assets/*` + `ASSETS.md`; writes back `index.json` path+status | status receipt |
+| **W4 Execute** | Executor (**zero design latitude**) | `packages/skills/implement-milestone/SKILL.md` (skill-text rescope to executor — TODO) | **`spec/blueprint.json`** (`layout`/`coupling`/`config`/`referenceSolution`/`acceptanceCriteria`) + `STRUCTURE.md` + `MEMORY.md` + `index.json` keys + `template-contract.md` | `src/**` built **VERBATIM** (entities at blueprint coords, threats on blueprint routes, the blueprint RESPAWN flow); populates `window.__GAME__` for real; **HALT+escalate on a missing blueprint number — never invent** | built/failed |
+| **VERIFY-2 QA** | Playtester (impl-fidelity, **NOT gameness**) | `packages/skills/verify/SKILL.md` (+`assertion-execution-grammar.md`, `perturbation-grammar.md` — TODO, `report.schema.json`) | the built game + `spec/blueprint.json` (`.referenceSolution`/`.acceptanceCriteria`/`.declaredRanges`) + `window.__GAME__` + `MEMORY.md` | `verify/report.M<id>.json` (**per-milestone**) + screenshots; bounded ≤3 self-fix (impl bugs only) OR `verify/escalations.M<id>.json` | `VALIDATION_PASSED/FAILED` marker |
 
-### The load-bearing cross-node contract — `window.__GAME__`
-The test hook is the linchpin: **W1** writes assertions against it → **W2** finalizes the canonical
-accessor (`packages/skills/scaffold/template-contract.md` §3; a verified superset of W1's draft) and the
-template must expose it → **W4** populates it from real state → **W5** reads it to assert. The emergent
-contract worked: each node decided its shape from evidence and the next absorbed the real thing.
+### The load-bearing cross-node contracts — `spec/blueprint.json` + `window.__GAME__`
+Two linchpins now. **`spec/blueprint.json`** (VERIFY-1's hardened, frozen design) is the single source of truth
+for W2/W3/W4/VERIFY-2 — `gdd.json` stays immutable as provenance. **`window.__GAME__`** is the observable test
+hook: **W1** drafts assertions → **VERIFY-1** upgrades them to Given/When/Then `acceptanceCriteria` over the hook +
+authors the `referenceSolution` → **W2** finalizes the canonical accessor (`template-contract.md` §3) and the
+template exposes it → **W4** populates it from real state → **VERIFY-2** reads it to assert fidelity. The new
+**`declaredRanges`** field is the contract VERIFY-1 → VERIFY-2 that makes the isomorphic-perturbation gate possible
+(permute within the range; a faithful build is invariant, a contorted one diverges).
 
 ### Sequencing decisions (the chain's design, recorded here)
 - **Milestone spine is fully sequential** (W4→W5 per milestone, each milestone complete before the next),
@@ -51,11 +60,16 @@ contract worked: each node decided its shape from evidence and the next absorbed
   self-fix is internal to the W5 agent; the milestone fan-out has a static default of 3.
 
 ## The skills (this repo)
-All six node skills live under `packages/skills/<name>/`. Owners of node CRAFT; the chain is owned by
+All seven node skills live under `packages/skills/<name>/`. Owners of node CRAFT; the chain is owned by
 game-omni.js. Each skill cites its provenance inline (repo path or URL) — no rule rests on imagination.
-- `classify-game/` · `write-gdd/` · `scaffold/` (also owns `template-contract.md` — the hook/template
-  contract) · `assets/` · `implement-milestone/` · `verify/` (also owns `assertion-execution-grammar.md` —
-  the assertion interpreter + Phase-2 harness spec).
+- `classify-game/` · `write-gdd/` · **`verify-design/`** (VERIFY-1 — the design-quality gate; owns
+  `blueprint.schema.json` — TODO) · `scaffold/` (also owns `template-contract.md` — the hook/template
+  contract) · `assets/` · `implement-milestone/` (W4 EXECUTE — executor) · `verify/` (VERIFY-2 — impl/QA;
+  owns `assertion-execution-grammar.md` + `perturbation-grammar.md` — TODO + `report.schema.json`).
+- **Open authoring (this redesign):** `verify-design/blueprint.schema.json` (validator for `spec/blueprint.json`),
+  `verify/perturbation-grammar.md` + `perturbation.ts` (the isomorphic-permutation engine), the
+  `implement-milestone/SKILL.md` text rescope (Coder→Executor: build the blueprint verbatim, HALT+escalate on a
+  missing number), and the per-milestone `report.M<id>.json` writer (today's `report.ts` overwrites one file).
 
 ## Governing docs (owners too)
 - `status.md` — project entry point. `design/pipeline-design-v1.md` — the why (waves, milestone policy,
@@ -260,6 +274,28 @@ session can retrace the evidence behind any edit. A claim with no doc on disk is
   as "good game." The standing correction: a green W5 means **"the mechanics fire," never "the game is good."**
   Per the Hermes model this is by design — **the human is the quality eye**; the response is to fix the concrete
   defects (above) and keep the human as the gate, NOT to add reward-hackable "fun/legibility" assertions.
+- 2026-06-10 — `game-omni.js` (chain) + `verify-design/SKILL.md` (NEW) + `verify/SKILL.md` (rescoped) —
+  **ARCHITECTURAL REDESIGN: split verification into two nodes (separation of powers).** Trigger: td1/val1
+  proved the system reliably ships bad games AND val1's W4-M2 THRASHED to the node-timeout (114 tools, 233k
+  think) the moment the CHALLENGE pillar made W1's design genuinely tense — because the single W5 was graded
+  through state the implementer itself populated ("student grades its own homework") and conflated *is-the-design-
+  good* with *is-the-code-correct*, so the implementer contorted the game (guard self-disable, score-teleport,
+  layout shaped to the broken verify driver) to pass its own oracle. Diagnosis (Exa-researched best practices →
+  `~/.claude/research/verify-node-construction-best-practices.md`): the missing properties are INDEPENDENCE and
+  REAL PLAY. **Fix (chain redesign, human-directed):** `W0 → W1 → VERIFY-1 → W2 → W3 → (W4 Execute → VERIFY-2)`.
+  **VERIFY-1** (`verify-design/`, Design Critic, pre-code/static) judges + HARDENS the design into a frozen,
+  winnable `spec/blueprint.json` — 7-criterion rubric + per-archetype KINEMATIC FEASIBILITY MATH + the
+  "no-undesirable-solution" threat-on-path check (formally *Quantifying over Play*) + a reference INTENDED SOLUTION
+  + `declaredRanges` envelope; it owns GAMENESS alone. **W4 EXECUTE** builds the blueprint VERBATIM with zero
+  design latitude (a missing number ⇒ HALT+escalate, never invent). **VERIFY-2** (`verify/`, rescoped) checks
+  IMPLEMENTATION FIDELITY only — user-flow Given/When/Then from KNOWN preconditions (dodges the broken bot
+  navigation), completability via intended-solution replay, trace-level invariants, and the load-bearing
+  ISOMORPHIC PERTURBATION gate (re-run within `declaredRanges`; a faithful build is invariant, a contorted one
+  diverges → catches the td1/val1 cheat class); it never re-judges gameness. The human is steward, NOT a runtime
+  gate. Verify: `node --check` green · `extract.mjs` → 11 stages clean. **STILL OPEN (executable follow-ups):**
+  `verify-design/blueprint.schema.json`, `verify/perturbation-grammar.md` + `perturbation.ts`, the
+  `implement-milestone/SKILL.md` Coder→Executor text rescope, the per-milestone `report.M<id>.json` writer; then a
+  fresh validation run. (commit: skillsys(game-omni) — this entry; research doc: `~/.claude/research/verify-node-construction-best-practices.md`.)
 - _(future flaws/fixes append here so repeat-flaws become visible and the next diagnosis starts ahead.)_
 
 ## Stewardship note

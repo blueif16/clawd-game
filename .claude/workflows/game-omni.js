@@ -11,12 +11,21 @@
 // after its design sub-agent has researched it, written its SKILL, and committed
 // its artifact schema — so what runs is always real, never assumed.
 //
-//   BUILT:  W0 Classify
-//   TODO:   W1 Spec -> W2 Scaffold -> [W3 Assets ∥ W4 Implement(M1..Mn)] -> W5 Verify+Fix
+//   CHAIN (7 nodes — separation of powers: a DESIGN gate before code, a QA gate after):
+//   W0 Classify -> W1 Spec -> VERIFY-1 Design -> W2 Scaffold -> W3 Assets -> (per milestone: W4 Execute -> VERIFY-2 QA)
 //
-// Pi-portability: every node is a single agent() call with a forced-JSON schema;
-// fan-outs (milestones, asset slots) are discovered-once lists with static
-// defaults, never extractor-invisible data-dependent branching.
+// WHY two verify nodes (2026-06-10 redesign): the old single verify node was graded through state the
+// IMPLEMENTER itself populated ("the student grades its own homework") AND it conflated "is the design
+// good?" with "is the code correct?". We split those. VERIFY-1 judges + HARDENS the design into a frozen,
+// winnable spec/blueprint.json BEFORE any code (static: rubric + kinematic feasibility math + the
+// "no undesirable solution" threat-on-path check). W4 EXECUTE then builds that blueprint VERBATIM with
+// ZERO design latitude (a missing number => HALT + escalate, never invent). VERIFY-2 checks IMPLEMENTATION
+// FIDELITY to the frozen blueprint — explicitly NOT gameness — incl. an isomorphic-perturbation gate that
+// catches a build contorted to pass the exact test. The human is steward, not a runtime gate.
+//
+// Pi-portability: every node is a single agent() call with a forced-JSON schema; fan-outs (milestones,
+// asset slots) are discovered-once lists with static defaults; the design verdict + the QA marker are
+// parseable on-disk fields, never a result-dependent branch the extractor can't see.
 // ============================================================================
 
 export const meta = {
@@ -24,12 +33,12 @@ export const meta = {
   description: 'Prompt -> verified, playable Phaser 2D web game in one pass. Nodes coordinate through on-disk artifacts; each loads an evidence-grounded skill. Pi-portable.',
   phases: [
     { title: 'W0 Classify', detail: 'Designer: route prompt -> physics-first archetype + one-line core loop + explicit scope-cut. Writes spec/classification.json.' },
-    // --- the target shape (built out one sub-agent at a time) ---
-    { title: 'W1 Spec', detail: 'Designer: slim GDD + milestone list (2-5) with per-milestone runtime assertions. Writes spec/gdd.json + spec/PLAN.md. (TODO)' },
-    { title: 'W2 Scaffold', detail: 'Coder: copy genre template -> running empty project + STRUCTURE.md + index.json (asset slots). (TODO)' },
+    { title: 'W1 Spec', detail: 'Designer: slim GDD + milestone list (2-5) with per-milestone runtime assertions. Writes spec/gdd.json + spec/PLAN.md.' },
+    { title: 'VERIFY-1 Design', detail: 'Design Critic (pre-code, static): judge + HARDEN the thesis into a winnable, complete, frozen blueprint (rubric + kinematic feasibility + threat-on-path). Writes spec/blueprint.json + spec/DESIGN_REVIEW.md.' },
+    { title: 'W2 Scaffold', detail: 'Coder: copy genre template -> running empty project + STRUCTURE.md + index.json (asset slots); merges the blueprint\'s COMPLETE config.' },
     { title: 'W3 Assets', detail: 'Artist: fill public/assets/ + ASSETS.md from index.json. Placeholder-first (gemini toggle).' },
-    { title: 'W4 Implement', detail: 'Coder: implement each milestone, wiring template juice; populates window.__GAME__ for real; builds green; updates MEMORY.md.' },
-    { title: 'W5 Verify+Fix', detail: 'Playtester (bounded self-fix <=3): headless Playwright -> assert vs window.__GAME__ -> VALIDATION_PASSED/FAILED. Writes verify/report.json.' },
+    { title: 'W4 Execute', detail: 'Executor (zero design latitude): build the frozen blueprint VERBATIM (coordinates/routes/respawn flow); populate window.__GAME__ for real; build green; HALT + escalate on any missing number, never invent.' },
+    { title: 'VERIFY-2 QA', detail: 'Playtester (bounded self-fix <=3): headless -> user-flow fidelity from known preconditions + completability replay + invariants + ISOMORPHIC PERTURBATION -> VALIDATION_PASSED/FAILED. Writes verify/report.M<id>.json. NOT gameness.' },
   ],
 }
 
@@ -274,6 +283,66 @@ Write exactly two files under ${PROJECT}/spec/, valid against packages/skills/wr
 )
 
 // ----------------------------------------------------------------------------
+// VERIFY-1 — Design-quality gate  (skill: packages/skills/verify-design/SKILL.md)
+// Reads:  spec/gdd.json (W1 thesis) + spec/classification.json (W0) + spec/PLAN.md
+// Writes: spec/blueprint.json (the HARDENED, frozen, winnable design — the NEW single source of truth
+//         for W2/W4/VERIFY-2) + spec/DESIGN_REVIEW.md (the human-readable verdict + the math trail).
+// Runs BEFORE any code: judges gameness STATICALLY (7-criterion rubric + per-archetype kinematic
+// feasibility math + the "no undesirable solution" threat-on-reward-path check), HARDENS every tunable/
+// coordinate/route/respawn-flow + the declaredRanges perturbation envelope, authors the reference
+// INTENDED SOLUTION (proof-by-existence it is winnable) + the Given/When/Then acceptanceCriteria
+// (VERIFY-2's fidelity contract), and emits a verdict. Bounded internal <=2 self-revise that IMPROVES
+// the design (never weakens it). Pi-safe: ONE static stage, forced-JSON; the verdict
+// (blueprint.verdict.result in {DESIGN_PASSED, DESIGN_FAILED}) is a parseable on-disk field — downstream
+// runs unconditionally, a DESIGN_FAILED surfaces as an artifact like W5's marker, never a hidden branch.
+// Full validator: packages/skills/verify-design/blueprint.schema.json (to author); this inline schema
+// forces the load-bearing structure (rich nested parts stay open).
+// ----------------------------------------------------------------------------
+const BLUEPRINT_SCHEMA = {
+  type: 'object', additionalProperties: true,
+  required: ['verdict', 'meta', 'milestones', 'config', 'layout', 'referenceSolution', 'acceptanceCriteria', 'declaredRanges'],
+  properties: {
+    verdict: {
+      type: 'object', additionalProperties: true, required: ['result'],
+      properties: {
+        result: { type: 'string', enum: ['DESIGN_PASSED', 'DESIGN_FAILED'], description: 'The hard gate (criteria 1-4 on the numbers). DESIGN_FAILED routes back to W1.' },
+        rubric: { type: 'array', items: { type: 'object', additionalProperties: true }, description: 'Per-criterion {criterion, verdict, evidence, numbersUsed}.' },
+        hardened: { type: 'array', items: { type: 'string' }, description: 'What VERIFY-1 made concrete that W1 left implicit.' },
+        reasons: { type: 'array', items: { type: 'string' }, description: 'On DESIGN_FAILED: the specific criterion + numbers.' },
+      },
+    },
+    meta: { type: 'object', additionalProperties: true },
+    entities: { type: 'array' }, mechanics: { type: 'array' }, controls: { type: 'array' },
+    winCondition: { type: 'object', additionalProperties: true }, loseCondition: { type: 'object', additionalProperties: true },
+    config: { type: 'object', additionalProperties: true, description: 'COMPLETE hardened tunables (every key the archetype needs — no missing number for the executor).' },
+    layout: { type: 'object', additionalProperties: true, description: 'Concrete placement: playerSpawn, goal, rewards[], threats[] (route + timing), bounds.' },
+    coupling: { type: 'array', items: { type: 'object', additionalProperties: true }, description: 'Threat-on-reward-path per reward/goal (the proven tension).' },
+    feasibility: { type: 'object', additionalProperties: true, description: 'The kinematic math with numbersUsed (human-auditable).' },
+    referenceSolution: { type: 'object', additionalProperties: true, description: 'The proven winning action-sequence that engages the threat — VERIFY-2 replays it.' },
+    acceptanceCriteria: { type: 'array', items: { type: 'object', additionalProperties: true }, description: 'Given/When/Then over __GAME__ — VERIFY-2 checks these from known preconditions.' },
+    declaredRanges: { type: 'object', additionalProperties: true, description: 'Per-tunable/coordinate [min,max] perturbation envelope — VERIFY-2 permutes WITHIN these; every endpoint keeps the design winnable + the threat on path.' },
+    milestones: { type: 'array', minItems: 2, maxItems: 5, items: { type: 'object', additionalProperties: true }, description: 'Carried from the gdd, hardened against the concrete numbers; drives the W4/VERIFY-2 fan-out.' },
+    assetList: { type: 'array' },
+  },
+}
+
+phase('VERIFY-1 Design')
+log('game-omni: design gate — judge + HARDEN the thesis into a winnable, frozen blueprint (static, before any code)')
+const v1 = await agent(
+  nodePrompt('packages/skills/verify-design/SKILL.md', `You are VERIFY-1, the DESIGN-QUALITY GATE (Design Critic), inserted BETWEEN W1 and W2. You run BEFORE any code, asset, or scaffold exists — there is nothing to run, so you reason STATICALLY. Read from ${PROJECT}: spec/gdd.json (W1's design thesis), spec/classification.json (W0 — archetype/coreLoop/physicsProfile/scopeCut), and spec/PLAN.md (W1's ## Playability claim).
+
+Do two inseparable things, per the SKILL's fixed rubric:
+1. JUDGE the design on the numbers — is there a REAL interesting decision (a risk weighed against a reward); is the threat ON the reward/critical path (NO "undesirable solution": no threat-free path to any reward/goal — statically decidable on the coordinates); is it WINNABLE + FAIR by the per-archetype KINEMATIC FEASIBILITY MATH (every gap/reach/window physically clearable by the documented controls; no soft-lock); is the blueprint COMPLETE.
+2. HARDEN it — fill EVERY tunable, coordinate, patrol route+timing, count, and the exact win/lose/RESPAWN flow so the executor (W4) builds it VERBATIM with zero latitude; emit the declaredRanges perturbation envelope (per-tunable/coordinate [min,max] that keeps the design winnable + the threat on path at BOTH endpoints — VERIFY-2 needs this); author the reference INTENDED SOLUTION (a concrete winning action-sequence that ENGAGES the threat — proof-by-existence) and the Given/When/Then acceptanceCriteria over window.__GAME__.
+
+When a hard criterion (1-4) fails, FIX the design (re-place the threat onto the path / adjust the number / fill the missing value) — run the bounded <=2 self-revise; NEVER weaken the design to pass (don't delete the threat, don't relax winCondition). If still failing after 2 revises, emit verdict.result="DESIGN_FAILED" with the criterion + numbers (routes back to W1).
+
+Write exactly two files under ${PROJECT}/spec/: blueprint.json (the hardened, frozen design — the new single source of truth; valid against packages/skills/verify-design/blueprint.schema.json) and DESIGN_REVIEW.md (the human-readable verdict + the math trail). Then return the blueprint object as your structured result (incl. the milestones, hardened) and stop. Reason with LOW temperature — this is feasibility MATH + a fixed rubric, not creativity.`,
+    contract({ artifacts: ['spec/blueprint.json', 'spec/DESIGN_REVIEW.md'], owns: ['spec/**'] })),
+  { label: 'VERIFY-1 design', phase: 'VERIFY-1 Design', schema: BLUEPRINT_SCHEMA }
+)
+
+// ----------------------------------------------------------------------------
 // W2 — Scaffold  (skill: packages/skills/scaffold/SKILL.md + template-contract.md)
 // Reads:  ${PROJECT}/spec/gdd.json
 // Writes: the running EMPTY project + ${PROJECT}/STRUCTURE.md + ${PROJECT}/index.json (asset slots),
@@ -300,10 +369,10 @@ const SCAFFOLD_RESULT_SCHEMA = {
 phase('W2 Scaffold')
 log('game-omni: scaffolding empty project from the genre template + index.json + STRUCTURE.md + the __GAME__ hook')
 const w2 = await agent(
-  nodePrompt('packages/skills/scaffold/SKILL.md', `You are W2 Scaffold (Coder). Honor packages/skills/scaffold/template-contract.md exactly. Read ${PROJECT}/spec/gdd.json (written by W1). Then, in order:
-1. Copy templates/modules/<gdd.meta.archetype> into ${PROJECT} (recursive, no-clobber). Fallback to platformer if the module is missing; note it in ${PROJECT}/MEMORY.md. Set package.json.name from meta.title.
-2. Merge gdd.config into ${PROJECT}/src/gameConfig.json: wrap each flat key as {value,type,description} under the archetype's sub-object (playerConfig/gridConfig/towerDefenseConfig/battleConfig per the skill). MERGE (keep template defaults). NEVER touch screenSize/debugConfig/renderConfig. Drop unknown keys with a note.
-3. Derive ${PROJECT}/index.json from gdd.assetList[] UNION gdd.entities[].assetSlot — one slot row each: {slot,type,path,width,height,frames?,entityIds?,description,status:"pending"}, archetype-default dims as hints. Valid against packages/skills/scaffold/index.schema.json. Empty -> slots:[].
+  nodePrompt('packages/skills/scaffold/SKILL.md', `You are W2 Scaffold (Coder). Honor packages/skills/scaffold/template-contract.md exactly. Read ${PROJECT}/spec/blueprint.json — the FROZEN design from VERIFY-1 (a superset of the gdd whose .config is now COMPLETE and whose numbers are the hardened, winnable ones); it is the single source of truth (spec/gdd.json remains only as historical provenance). Then, in order:
+1. Copy templates/modules/<blueprint.meta.archetype> into ${PROJECT} (recursive, no-clobber). Fallback to platformer if the module is missing; note it in ${PROJECT}/MEMORY.md. Set package.json.name from meta.title.
+2. Merge blueprint.config (the COMPLETE hardened tunables — every key the design needs, including enemy/threat speeds) into ${PROJECT}/src/gameConfig.json: wrap each flat key as {value,type,description} under the CORRECT archetype sub-object (playerConfig/enemyConfig/gridConfig/towerDefenseConfig/battleConfig per the skill — an enemy-speed tunable lands in enemyConfig, NOT dropped). MERGE (keep template defaults). NEVER touch screenSize/debugConfig/renderConfig. A key with no schema home is a CONTRACT GAP — record it in MEMORY.md, do NOT silently drop it.
+3. Derive ${PROJECT}/index.json from blueprint.assetList[] UNION blueprint.entities[].assetSlot — one slot row each: {slot,type,path,width,height,frames?,entityIds?,description,status:"pending"}, archetype-default dims as hints. Valid against packages/skills/scaffold/index.schema.json. Empty -> slots:[].
 4. Write ${PROJECT}/STRUCTURE.md IN FULL per the skill: Controls, Scenes, Entities(file/extends/behaviors/assetSlot), Systems, State/Event map, Test hook, Assets(->index.json), Build, Notes. Mark W4 work as TODO-W4:.
 5. Ensure ${PROJECT}/src/main.ts exposes window.__GAME__ per template-contract.md (ready/status/scene/player/score/entities + archetype extras + snapshot()/commands). If absent, add the thin read-only adapter (IDs+primitives, never raw Phaser objects; status normalized; score from registry).
 6. Run \`npm run build\` in ${PROJECT}. It MUST exit 0. Fix only scaffold-level breakage; do NOT tighten tsconfig. If it cannot be made green, record the error in MEMORY.md and return status:"failed" — NEVER report success on a red build.
@@ -381,52 +450,59 @@ const VERIFY_RESULT_SCHEMA = {
     marker: { type: 'string', enum: ['VALIDATION_PASSED', 'VALIDATION_FAILED'], description: 'Verbatim gamedevbench-ported marker. Missing = FAILED.' },
     passed: { type: 'boolean' },
     fixCycles: { type: 'integer', minimum: 0, maximum: 3 },
-    failedAssertions: { type: 'array', items: { type: 'string' }, description: 'describe of each failed assertion.' },
+    failedAssertions: { type: 'array', items: { type: 'string' }, description: 'describe of each failed/diverged check.' },
+    perturbationInvariant: { type: 'boolean', description: 'True iff the build stayed invariant under the isomorphic perturbation (§6). False = contorted build => FAILED.' },
+    escalation: { type: 'string', description: 'Present iff a genuine DESIGN problem was flagged (routes upstream to VERIFY-1, never the executor).' },
     screenshot: { type: 'string' },
     advisoryVlm: { type: 'string', description: 'Advisory canvas/VLM verdict — NEVER blocks the marker.' },
     summary: { type: 'string' },
   },
 }
 
-// Discovered-once milestone list (W1) with a Pi-safe static default of 3.
-const milestones = (w1 && Array.isArray(w1.milestones) && w1.milestones.length)
-  ? w1.milestones
-  : [{ id: 'M1' }, { id: 'M2' }, { id: 'M3' }]
+// Discovered-once milestone list with a Pi-safe static default of 3. Prefer VERIFY-1's HARDENED
+// blueprint milestones (the frozen truth); fall back to W1's gdd, then the static default.
+const milestones = (v1 && Array.isArray(v1.milestones) && v1.milestones.length)
+  ? v1.milestones
+  : (w1 && Array.isArray(w1.milestones) && w1.milestones.length)
+    ? w1.milestones
+    : [{ id: 'M1' }, { id: 'M2' }, { id: 'M3' }]
 
 const milestoneResults = []
 for (const m of milestones) {
   const mid = m && m.id ? m.id : `M${milestoneResults.length + 1}`
 
-  phase('W4 Implement')
+  phase('W4 Execute')
   const impl = await agent(
-    nodePrompt('packages/skills/implement-milestone/SKILL.md', `You are W4 IMPLEMENT (Coder). Implement ONE milestone (${mid}) — a playable vertical slice — on top of the existing ${PROJECT} project, then make the build green and stop.
+    nodePrompt('packages/skills/implement-milestone/SKILL.md', `You are W4 EXECUTE (Executor — ZERO design latitude). Build ONE milestone (${mid}) as a FAITHFUL, VERBATIM realization of VERIFY-1's FROZEN blueprint on top of the existing ${PROJECT} project, then make the build green and stop. You are NOT a designer: every gameplay decision was already made and PROVEN by VERIFY-1. You translate the blueprint into code — you do not improve, reinterpret, or "fix" the design.
 
-ABSORB (from ${PROJECT}): the ${mid} entry in spec/gdd.json (goal, acceptanceCriteria, assertions); STRUCTURE.md (its TODO-W4 points + the scene/entity/system/control map); MEMORY.md (prior quirks); index.json (the FROZEN asset keys); and packages/skills/scaffold/template-contract.md §3 (the window.__GAME__ hook). Read in full ONLY the _Template*/Base*/behaviors/systems files you will touch (3-layer read, not the whole tree). Prior milestones' code already exists — EXTEND it.
+ABSORB (from ${PROJECT}): spec/blueprint.json — the FROZEN design (the SINGLE source of truth). For ${mid} read: blueprint.layout (the EXACT coordinates of the player spawn, goal, every reward, every threat + its patrol route + timing — build these positions verbatim), blueprint.config (the COMPLETE tunables — read every value through, never substitute a template default), blueprint.coupling (the threat MUST contest the reward path as specified — never move a threat off the path or disable it), the exact win/lose/RESPAWN flow (build the RESPAWN the blueprint specifies — e.g. respawn-at-entrance with status staying 'playing' — NOT a generic game-over), blueprint.referenceSolution + blueprint.acceptanceCriteria (the behavior VERIFY-2 will check — make it REAL). Also read STRUCTURE.md (the scene/entity/system/control map + TODO-W4 points), MEMORY.md (prior quirks), index.json (the FROZEN asset keys), and packages/skills/scaffold/template-contract.md §3 (the window.__GAME__ hook). Read in full ONLY the _Template*/Base*/behaviors/systems files you will touch. Prior milestones' code already exists — EXTEND it.
 
-IMPLEMENT this slice: COPY a _Template* scene / EXTEND a Base* class / COMPOSE the template behaviors named in gdd.entities[].behaviors; override opt-in hooks (always call super). NEVER edit KEEP files (Base*.ts, behaviors/*, systems/*, ui/*, utils.ts) — create new files. Reference asset KEYS from index.json; never wait on assets (the Preloader placeholder-fills). Wire the template's juice (shake + a short hit-stop + flash + a score/particle pop) to amplify the core verb — wire, don't rebuild, don't over-juice (juice is cosmetic, never a field W5 observes).
+BUILD IT VERBATIM: COPY a _Template* scene / EXTEND a Base* class / COMPOSE the template behaviors; override opt-in hooks (always call super). NEVER edit KEEP files (Base*.ts, behaviors/*, systems/*, ui/*, utils.ts) — create new files. Place every entity at the blueprint's coordinates; drive each threat on the blueprint's route at its speed/timing; reference asset KEYS from index.json. Wire the template's juice to amplify the core verb (cosmetic only, never an observed field).
 
-POPULATE window.__GAME__ FROM REAL STATE per the contract: score via game.registry.set('score',n); set the normalized status flag at the REAL win/lose point; keep player/entities/extras live. ANTI-REWARD-HACK: implement the REAL mechanic each assertion describes so the observable is genuinely true — NEVER special-case or fake window.__GAME__ to satisfy an assertion.
+POPULATE window.__GAME__ FROM REAL STATE: score via game.registry.set('score',n); set the normalized status at the blueprint's REAL win/lose/respawn points; player/entities/extras live. ANTI-CONTORTION (absolute): implement the REAL mechanic on the blueprint's REAL relation/distance — NEVER fake/special-case __GAME__, NEVER tune an interaction to the verify driver's reach radius, NEVER disable a threat at a score threshold, NEVER teleport state to make a check pass. Those are the exact td1/val1 cheats VERIFY-2's perturbation gate is built to catch.
 
-BUILD-HEALTH: run npm run build in ${PROJECT}; on failure fix the ROOT CAUSE (use the known-failure->fix table in the skill); re-build; bounded ~5 attempts; never delete/stub template files or loosen tsconfig. If it cannot go green with a scoped fix, record the error in MEMORY.md and return status:"failed".
+THE NO-INVENTION RULE: if the blueprint is MISSING a number you need (a coordinate, a speed, a respawn target) or is internally contradictory, DO NOT invent or guess it — that is a design decision you are forbidden to make. HALT: record the gap in MEMORY.md, write the specifics, and return status:"failed" with reason "blueprint underspecified: <what>" so it routes back to VERIFY-1. Inventing a missing design value is the original sin this redesign removes.
 
-Tick the completed TODO-W4 in STRUCTURE.md and append terse quirks to MEMORY.md. Implement exactly ${mid}, build, stop. Do NOT implement other milestones or chase W5 assertion pass/fail. Return the status receipt.`,
-      contract({ artifacts: [], owns: ['src/**', 'STRUCTURE.md', 'MEMORY.md'], note: 'W4 has no fixed required filename (game-specific scenes); DRIVER-OWNS only — the wrote-nothing hard-catch is the per-stage-commit roadmap.' })),
-    { label: `W4 implement ${mid}`, phase: 'W4 Implement', schema: IMPLEMENT_RESULT_SCHEMA }
+BUILD-HEALTH: run npm run build in ${PROJECT}; on failure fix the ROOT CAUSE (skill's known-failure table); bounded ~5 attempts; never delete/stub template files or loosen tsconfig. Tick the TODO-W4 in STRUCTURE.md, append terse quirks to MEMORY.md. Build exactly ${mid} verbatim, build green, stop. Return the status receipt.`,
+      contract({ artifacts: [], owns: ['src/**', 'STRUCTURE.md', 'MEMORY.md'], note: 'W4 EXECUTE has no fixed required filename (game-specific scenes); DRIVER-OWNS only. Builds the frozen blueprint verbatim; a missing blueprint number => status:"failed" (escalate), never invented.' })),
+    { label: `W4 execute ${mid}`, phase: 'W4 Execute', schema: IMPLEMENT_RESULT_SCHEMA }
   )
 
-  phase('W5 Verify+Fix')
+  phase('VERIFY-2 QA')
   const verify = await agent(
-    nodePrompt('packages/skills/verify/SKILL.md', `You are W5 VERIFY+FIX (Playtester). Verify ONE milestone (${mid}), already implemented by W4 and building green.
+    nodePrompt('packages/skills/verify/SKILL.md', `You are VERIFY-2 (Playtester — implementation-correctness / QA). Prove ONE milestone (${mid}), built VERBATIM by W4 from the frozen blueprint and building green, is a FAITHFUL, BUG-FREE realization of that blueprint. You do EXACTLY ONE job: did the executor build EXACTLY the frozen blueprint, bug-free, with the user flow working? You are NOT a design judge — VERIFY-1 already settled gameness; NEVER re-judge whether the design is good (that conflation is what made the old node game-able).
 
-Read from ${PROJECT}: the ${mid} assertions[] in spec/gdd.json ({id,describe,setup?,input?,observe,expect}); packages/skills/scaffold/template-contract.md §3 (the window.__GAME__ accessor + the observe grammar); MEMORY.md (W4 quirks + capability gaps); packages/skills/verify/assertion-execution-grammar.md (the compiler + evaluator + marker).
+Read from ${PROJECT}: spec/blueprint.json — its sections .config+.layout+.declaredRanges+.verdict (the FROZEN tunables, coordinates, routes/timings, win/lose/RESPAWN flow, and the per-tunable declaredRanges = your perturbation envelope), .referenceSolution (the proven winning action-sequence), .acceptanceCriteria (the Given/When/Then fidelity contract for ${mid}); the ${mid} assertions[] in spec/gdd.json; packages/skills/scaffold/template-contract.md §3 (the __GAME__ accessor + observe grammar + sanctioned commands); MEMORY.md (W4 quirks); packages/skills/verify/assertion-execution-grammar.md + perturbation-grammar.md (the mechanical how).
 
-RUN THE PRE-BUILT VERIFY RUNNER (do NOT re-implement Playwright): the harness lives at packages/verify/ (see packages/verify/README.md for the exact CLI — e.g. verify-milestone ${PROJECT} ${mid}). It builds/serves the game, launches real headless Chromium (swiftshader), advances past the title gate, waits for window.__GAME__.ready, fires each assertion's setup/input, evaluates observe vs the one expect comparator, writes ${PROJECT}/verify/report.json + screenshots, and prints the VERBATIM marker to stdout ("VALIDATION_PASSED: ${mid} all N assertions passed" iff the game booted clean and every assertion passes; else "VALIDATION_FAILED: <describe>; <describe>; ..."; a missing marker = FAILED). Parse the marker.
+Drive the headless harness (packages/verify/, real Chromium). Run the SIX gates, then aggregate: (1) BUILD-HEALTH — boot, reach __GAME__.ready (never sleep), no console errors, canvas not blank. (2) USER-FLOW FIDELITY — each blueprint mechanism as Given/When/Then, driven from a KNOWN precondition YOU place (commands.reset + a short documented-input drive, or commands.setState of ONLY the precondition fields — you have the blueprint coordinates, so you NEVER ask a generic bot to navigate a tense level; NEVER setState the OBSERVED outcome). (3) COMPLETABILITY — replay blueprint.referenceSolution step-by-step and assert it reaches status:'won' through the REAL flow (interim observables through real collection, never injected). (4) INVARIANTS — sample __GAME__ across each drive: monotonicity (score/lives), bounds, no soft-lock, status-legality vs the frozen win/lose/RESPAWN flow. (5) ISOMORPHIC PERTURBATION (load-bearing anti-hack) — re-run the acceptance criteria + completability with blueprint parameters PERMUTED WITHIN declaredRanges (coords/seed/counts/approach-distance/timing); a faithful build is INVARIANT, a contorted/hard-coded build DIVERGES => FAIL. This is how the guard-disable / score-teleport / driver-radius-overfit class is caught. (6) verdict-correctness self-guard.
 
-On VALIDATION_FAILED run a BOUNDED <=3-cycle self-fix: feed yourself {failed describe + observed-vs-expected + console/pageerror + screenshot + MEMORY.md}; diagnose the REAL root cause; EDIT src/** GAME CODE ONLY (reuse the implement-milestone repair discipline); re-run npm run build; re-run the verify harness. STOP on all-pass / a repeated failure signature (stall) / 3 cycles; then re-emit the marker. ANTI-REWARD-HACK (absolute): NEVER edit spec/gdd.json, the assertions, the window.__GAME__ hook, or the verify harness to fake a pass; the oracle is immutable; make the REAL mechanic true. An honest VALIDATION_FAILED after the bound is the correct output.
+Emit the VERBATIM marker: "VALIDATION_PASSED: ${mid} all N checks passed (fidelity + completability + invariants + perturbation)" iff ALL gates pass, else "VALIDATION_FAILED: <describe>; ...". A missing marker = FAILED.
 
-If you edited src/**, re-run prior milestones' assertions once (regression guard). The harness writes ${PROJECT}/verify/report.json (schema: packages/skills/verify/report.schema.json — per-assertion observed-vs-expected, the marker, screenshots, the advisory canvas-not-blank/VLM verdict that never blocks); ensure the FINAL harness run reflects the milestone's true state. Return the marker receipt. The marker is the gate.`,
-      contract({ artifacts: ['verify/report.json'], owns: ['src/**', 'verify/**', 'MEMORY.md'] })),
-    { label: `W5 verify ${mid}`, phase: 'W5 Verify+Fix', schema: VERIFY_RESULT_SCHEMA }
+On FAILED run the BOUNDED <=3-cycle self-fix (harness-enforced counter): CLASSIFY the failure. An IMPLEMENTATION BUG (build != blueprint: a dropped tunable, status set at the wrong point, a mechanic keyed to a literal or to the driver's radius, a faked RESPAWN) => EDIT src/** GAME CODE ONLY to make the REAL behavior match the frozen blueprint; re-build; re-run ALL gates incl. perturbation. A genuine DESIGN PROBLEM (the frozen blueprint itself is wrong/unwinnable even when built faithfully) => DO NOT fix here: write ${PROJECT}/verify/escalations.${mid}.json and emit "VALIDATION_FAILED: design escalation — <one line>" (routes to VERIFY-1, NOT the executor). ANTI-REWARD-HACK (absolute): the fix touches src/** game code ONLY — NEVER spec/blueprint.json, the referenceSolution, the acceptanceCriteria, spec/gdd.json, the __GAME__ hook, the harness, or perturbation-grammar.md; the oracle is immutable; never widen a declaredRange.
+
+Write ${PROJECT}/verify/report.${mid}.json (PER-MILESTONE, NEVER overwrite a prior milestone — schema packages/skills/verify/report.schema.json, extended: fidelity[]/completability/invariants[]/perturbation/escalation?) + screenshots. If you edited src/**, re-run prior milestones' fidelity once (regression guard). Return the marker receipt. The marker is the gate.`,
+      contract({ artifacts: [`verify/report.${mid}.json`], owns: ['src/**', 'verify/**', 'MEMORY.md'] })),
+    { label: `VERIFY-2 ${mid}`, phase: 'VERIFY-2 QA', schema: VERIFY_RESULT_SCHEMA }
   )
 
   milestoneResults.push({ milestone: mid, implement: impl, verify })
@@ -436,10 +512,12 @@ If you edited src/**, re-run prior milestones' assertions once (regression guard
 const allPassed = milestoneResults.length > 0 && milestoneResults.every((r) => r.verify && r.verify.marker === 'VALIDATION_PASSED')
 
 return {
-  built: ['W0', 'W1', 'W2', 'W3', 'W4', 'W5'],
+  built: ['W0', 'W1', 'VERIFY-1', 'W2', 'W3', 'W4', 'VERIFY-2'],
   status: allPassed ? 'game-verified' : 'incomplete',
   classification: w0,
   gdd: w1,
+  designVerdict: (v1 && v1.verdict && v1.verdict.result) || null,
+  blueprint: v1,
   scaffold: w2,
   assets: w3,
   milestones: milestoneResults,

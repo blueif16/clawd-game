@@ -7,11 +7,11 @@ role: Playtester (implementation-correctness / QA)
 argument-hint: "(the pipeline passes ONE milestone — an id like 'M2' or the milestone object; reads VERIFY-1's frozen blueprint (concrete tunables + reference intended solution + Given/When/Then acceptance criteria), spec/gdd.json, scaffold/template-contract.md §3, MEMORY.md, and the built game in the project dir; writes verify/report.M<id>.json + screenshots)"
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob
 metadata:
-  reads: [spec/blueprint.json (VERIFY-1, IMMUTABLE — sections .config+.layout+.declaredRanges+.verdict = the frozen tunables incl. the declared RANGE per tunable (the §6 perturbation envelope); .referenceSolution = the intended winning action-sequence; .acceptanceCriteria = the Given/When/Then fidelity contract), spec/gdd.json, packages/skills/scaffold/template-contract.md §3, MEMORY.md, index.json, src/** (only when self-fixing), the built game (dist/ or vite preview)]
-  writes: [verify/report.M<id>.json (PER-MILESTONE — never overwrite a prior milestone's report), verify/*.png (screenshots), src/** (ONLY during the bounded self-fix — game code only, IMPLEMENTATION bugs only), MEMORY.md (append a quirk if a fix reveals one), verify/escalations.M<id>.json (a flagged DESIGN problem to route upstream, NEVER fixed here)]
+  reads: [blueprint/frozen.json (VERIFY-1 — concrete tunables, patrol routes+timings, coordinates, gap widths, counts, win/lose/RESPAWN flow), blueprint/intended-solution.json (VERIFY-1 — the reference winning action-sequence that engages the threat), blueprint/acceptance.json (VERIFY-1 — the Given/When/Then fidelity contract), spec/gdd.json, packages/skills/scaffold/template-contract.md §3, MEMORY.md, index.json, src/** (only when self-fixing), the built game (dist/ or vite preview)]
+  writes: [verify/report.M<id>.json (PER-MILESTONE — never overwrite a prior milestone's report), verify/*.png (screenshots), src/** (ONLY during the bounded self-fix — game code only, IMPLEMENTATION bugs only), MEMORY.md (append a quirk if a fix reveals one), blueprint/escalations.M<id>.json (a flagged DESIGN problem to route upstream, NEVER fixed here)]
   contracts-owned: [report.schema.json (extended for the impl-QA gate), assertion-execution-grammar.md (the §2 compiler + observe evaluator, shared with the harness), perturbation-grammar.md (NEW — the isomorphic-permutation contract over the blueprint's declared ranges)]
   contract-upstream: ../scaffold/template-contract.md
-  blueprint-upstream: ../verify-design/SKILL.md (VERIFY-1 — emits the single spec/blueprint.json: frozen tunables + declared ranges + intended solution + acceptance criteria + verdict; IMMUTABLE here)
+  blueprint-upstream: ../../design/verify-redesign/verify1-design-gate.SKILL (VERIFY-1 — the frozen blueprint + intended solution + acceptance criteria; IMMUTABLE here)
   schema-upstream: ../write-gdd/gdd.schema.json
   repair-discipline: ../implement-milestone/SKILL.md   # §7 — DEDUP; VERIFY-2 references, does not restate
   archetypes: [platformer, top_down, grid_logic, tower_defense, ui_heavy]
@@ -20,15 +20,6 @@ metadata:
 ---
 
 # VERIFY-2 — Prove the build is a FAITHFUL realization of the frozen blueprint (fidelity + correctness, NOT gameness)
-
-> **WIRING NOTE — the canonical blueprint artifact (reconciled at integration).** VERIFY-1 emits a SINGLE
-> on-disk file **`spec/blueprint.json`** (one forced-JSON artifact; `gdd.json` stays immutable for
-> provenance). Wherever this skill names `blueprint/frozen.json`, `blueprint/intended-solution.json`, or
-> `blueprint/acceptance.json`, read the corresponding **SECTION of `spec/blueprint.json`**:
-> `.config`+`.layout`+`.declaredRanges`+`.verdict` (the *frozen tunables*, incl. the **declared range per
-> tunable** = the §6 perturbation envelope) · `.referenceSolution` (the *intended solution*) ·
-> `.acceptanceCriteria` (the Given/When/Then *acceptance* contract). A flagged design problem is written to
-> **`verify/escalations.M<id>.json`**. The blueprint and all its sections are IMMUTABLE here.
 
 You are the **seventh and final node** in the game-omni pipeline (role: **Playtester — implementation-correctness /
 QA**). You are invoked **ONCE PER MILESTONE**, after **W4 EXECUTE** built that milestone **VERBATIM** from
