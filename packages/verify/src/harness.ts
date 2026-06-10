@@ -794,8 +794,11 @@ function normalizeObserved(observed: unknown): unknown {
 
 /**
  * Map each milestone gdd assertion to its acceptance criterion (for the report's
- * fidelity[].given). The schema does not commit a hard id link, so we pair by
- * milestone + ORDER (acceptanceCriteria filtered to this milestone, in order, are
+ * fidelity[].given). The schema commits an ID-LINK (blueprint.schema.json
+ * acceptanceCriteria[].assertionId = the gdd assertion id the AC upgrades), so we
+ * pair BY assertionId first — a reordering of either list never misaligns the
+ * GIVEN annotation. We FALL BACK to milestone + ORDER for any AC lacking the link
+ * (older blueprints; acceptanceCriteria filtered to this milestone, in order, are
  * 1:1 with the milestone's assertions). Returns a map assertionId → criterion.
  */
 function mapAcceptanceToAssertions(
@@ -806,8 +809,26 @@ function mapAcceptanceToAssertions(
   const out = new Map<string, AcceptanceCriterion>();
   if (!Array.isArray(criteria)) return out;
   const forMilestone = criteria.filter((c) => c.milestone === milestoneId);
-  for (let i = 0; i < assertions.length && i < forMilestone.length; i += 1) {
-    out.set(assertions[i].id, forMilestone[i]);
+
+  // Pass 1 — committed id-link: pair by assertionId where present.
+  const assertionIds = new Set(assertions.map((a) => a.id));
+  const linkedCriteria = new Set<AcceptanceCriterion>();
+  for (const c of forMilestone) {
+    if (c.assertionId && assertionIds.has(c.assertionId) && !out.has(c.assertionId)) {
+      out.set(c.assertionId, c);
+      linkedCriteria.add(c);
+    }
+  }
+
+  // Pass 2 — order fallback: fill assertions still unmapped from the remaining
+  // (unlinked) criteria, in their declared order (legacy blueprints / missing link).
+  const remaining = forMilestone.filter((c) => !linkedCriteria.has(c));
+  let r = 0;
+  for (const assertion of assertions) {
+    if (out.has(assertion.id)) continue;
+    if (r >= remaining.length) break;
+    out.set(assertion.id, remaining[r]);
+    r += 1;
   }
   return out;
 }

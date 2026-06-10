@@ -202,8 +202,12 @@ function planMoves(
     const [min, max] = range;
     if (typeof min !== 'number' || typeof max !== 'number') continue;
 
-    // The frozen original. For rng.seed there is no literal — use min as the
-    // sentinel "original" so the selector moves off it.
+    // The frozen original. For rng.* there is NO frozen literal (a runtime-seeded
+    // game has no seed on the blueprint, perturbation-grammar.md §2.2): use the
+    // band min as a SENTINEL "original" purely so the move-the-needle selector
+    // (§2.3) has an anchor to differ from. This is NOT a fabricated design value —
+    // permutationsApplied[].original for an rng.* path is a sentinel (§8), and the
+    // seed the build runs under is always `permuted`.
     const seam = seamFor(parameterPath);
     const resolved = resolveOriginal(bp, parameterPath);
     const original = resolved ?? (parameterPath.startsWith('rng.') ? min : undefined);

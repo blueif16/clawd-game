@@ -32,6 +32,9 @@ export type DeclaredRanges = Record<string, Range>;
 export interface AcceptanceCriterion {
   id: string; // e.g. 'AC-M3-win'
   milestone: string; // e.g. 'M3'
+  /** ID-LINK: the gdd assertion id this AC upgrades (e.g. 'M3-A1'). Pairs the
+   * frozen GIVEN onto the executed assertion BY ID (fallback: milestone+order). */
+  assertionId?: string;
   given: string;
   when: string;
   then: string;
@@ -236,9 +239,10 @@ export const DEFAULT_PERMUTATION_SEED = 0xc0ffee;
 /**
  * Resolve the frozen ORIGINAL value of a parameterPath off the blueprint.
  * `config.<k>` → blueprint.config[k]; `layout.<...>` → walk blueprint.layout;
- * `rng.seed` → not stored on the blueprint (the level's default seed) → returns
- * undefined and the caller uses a sentinel (the seed has no frozen literal).
- * Returns undefined when the path is not present (the engine then skips it).
+ * `rng.*` → has NO frozen literal by contract (a runtime-seeded game carries no
+ * seed on the blueprint; perturbation-grammar.md §2.2) → returns undefined and the
+ * caller uses the band-min SENTINEL (an anchor for move-the-needle, NOT a design
+ * value). Returns undefined when the path is not present (the engine then skips it).
  */
 export function resolveOriginal(bp: Blueprint, parameterPath: string): number | undefined {
   const segs = parameterPath.split('.');

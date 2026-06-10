@@ -377,7 +377,7 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "milestone", "given", "when", "then", "observable", "expect"],
+        "required": ["id", "milestone", "assertionId", "given", "when", "then", "observable", "expect"],
         "properties": {
           "id": {
             "type": "string",
@@ -388,6 +388,11 @@
             "type": "string",
             "pattern": "^M[1-9][0-9]*$",
             "description": "The milestone this AC belongs to (e.g. 'M3')."
+          },
+          "assertionId": {
+            "type": "string",
+            "pattern": "^M[1-9][0-9]*-A[1-9][0-9]*$",
+            "description": "ID-LINK (committed contract): the gdd assertion id (gdd.schema.json assertion.id, e.g. 'M3-A1') this AC upgrades. ACs are 1:1 with the milestone's assertions (§5), so each AC names the assertion it is the Given/When/Then form of. VERIFY-2 pairs the AC's frozen GIVEN onto the executed assertion BY THIS ID (fallback: milestone + array order), so a reordering of either list never misaligns the annotation. Must reference an existing assertion id in the SAME milestone. Annotation-only: the executed check is the gdd assertion regardless."
           },
           "given": {
             "type": "string",

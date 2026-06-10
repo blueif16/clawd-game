@@ -71,8 +71,8 @@ game-omni.js. Each skill cites its provenance inline (repo path or URL) — no r
   (`packages/verify/src/{perturbation,completability,invariants,escalation,blueprint}.ts` + per-milestone
   `report.M<id>.json` writer + the six-gate `bin/verify-milestone.ts`) · `implement-milestone/SKILL.md` Coder→Executor
   rescope · the extended `verify/report.schema.json`. Harness `tsc --noEmit` green; chain `extract.mjs` → 11 stages.
-- **Still open:** a fresh end-to-end validation run on a real game (chromium not yet exercised) + 3 minor contract
-  refinements (`acceptanceCriteria`↔assertion id-link, `rng.seed` frozen-original, baked-config rebuild cost on Pi).
+- **Still open:** a fresh end-to-end validation run on a real game (chromium now installed). R1 (`acceptanceCriteria.assertionId`
+  id-link) + R2 (`rng.*` no-frozen-original sentinel) — RESOLVED 2026-06-10; R3 (baked-config rebuild cost) is measured BY the run.
 
 ## Governing docs (owners too)
 - `status.md` — project entry point. `design/pipeline-design-v1.md` — the why (waves, milestone policy,
@@ -314,6 +314,15 @@ session can retrace the evidence behind any edit. A claim with no doc on disk is
   `extract.mjs` → 11 stages. OPEN: a fresh chromium validation run + 3 minor contract refinements
   (`acceptanceCriteria`↔assertion id-link; `rng.seed` frozen-original; confirm baked-config rebuild cost on the Pi
   budget). (commit: skillsys(game-omni) — this entry; research doc: `~/.claude/research/verify-node-construction-best-practices.md`.)
+- 2026-06-10 — `verify-design/blueprint.schema.json` + `SKILL.md` §5 + `verify/perturbation-grammar.md` +
+  `packages/verify/src/{blueprint,harness,perturbation}.ts` — **residual contract refinements after the substrate
+  build (a3b6036).** R1: committed an explicit `acceptanceCriteria[].assertionId` link — AC ids and gdd-assertion ids
+  are DISJOINT namespaces (`AC-M3-win` vs `M3-A1`), so a shared-id collision was impossible; the harness now attaches
+  the frozen GIVEN by `assertionId` (order-fallback for legacy/absent). R2: codified `rng.*` has NO frozen original
+  (band-min recorded purely as the move-off sentinel; the applied seed is always the permuted one) — doc/comment only,
+  zero behavior change. R3 (baked-config rebuild cost) DEFERRED — empirical, measured by the validation run. The link is
+  ANNOTATION-ONLY: it routes which frozen GIVEN decorates which `fidelity[].given` row, never a verdict/envelope. Verify:
+  `tsc --noEmit` exit 0 · `node --check` green · `extract.mjs` → 11 stages. (commit: skillsys(game-omni) — this entry.)
 - _(future flaws/fixes append here so repeat-flaws become visible and the next diagnosis starts ahead.)_
 
 ## Stewardship note

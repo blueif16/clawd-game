@@ -308,6 +308,15 @@ that is not independently testable"; §Q8 "ACs → executable acceptance tests (
 directly to automated test code"; write-gdd/SKILL.md §5 the assertion model already = Given→When→Then over
 observable state.)_
 
+> **ID-LINK each AC to the gdd assertion it upgrades (committed contract).** The ACs are **1:1 with the
+> milestone's `assertions[]`**, so each AC MUST set `assertionId` to the gdd assertion id it is the
+> Given/When/Then form of (e.g. AC `AC-M3-win` → `assertionId: "M3-A1"`). VERIFY-2 attaches the AC's frozen
+> GIVEN onto the *executed* gdd assertion **by this id** (falling back to milestone + array order only if a
+> link is absent), so reordering either list never misaligns the annotation. This is an **attribution
+> precision** link, not a new check — the executed oracle is the gdd assertion regardless; the `assertionId`
+> only tells VERIFY-2 which assertion's report row carries which frozen precondition. `assertionId` must
+> name an assertion id in the SAME milestone.
+
 ---
 
 ## 6. CRITERIA 5–7 — FANTASY, PACING/ONBOARDING, PILLAR ALIGNMENT (design judgments, named principles)
@@ -412,7 +421,7 @@ requires (`meta`, `entities`, `mechanics`, `controls`, `winCondition`, `loseCond
     "engagesEveryThreat": true
   },
   "acceptanceCriteria": [           // §5: Given/When/Then in the __GAME__ vocabulary → VERIFY-2's fidelity contract
-    { "id": "AC-M3-win", "milestone": "M3",
+    { "id": "AC-M3-win", "milestone": "M3", "assertionId": "M3-A1",   // assertionId = the gdd assertion this AC upgrades (1:1; pairs the GIVEN by id)
       "given": "player at spawn (32,300), score 3 (all coins collected)",
       "when":  "fire controls toward exit per referenceSolution",
       "then":  "__GAME__.status === 'won'",
