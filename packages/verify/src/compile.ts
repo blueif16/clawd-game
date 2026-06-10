@@ -82,7 +82,7 @@ const SETTLE_CEILING_MS = 2000;
 const CANVAS = 'canvas';
 
 /** Read an observe expression off __GAME__ via the injected evaluator. */
-async function readObserve(page: Page, observe: string): Promise<unknown> {
+export async function readObserve(page: Page, observe: string): Promise<unknown> {
   return page.evaluate(
     (expr) => (window as any).__evalObserve((window as any).__GAME__, expr),
     observe,
@@ -90,7 +90,7 @@ async function readObserve(page: Page, observe: string): Promise<unknown> {
 }
 
 /** Re-focus the canvas before each key (Phaser loses focus — grammar §2.4). */
-async function focusCanvas(page: Page): Promise<void> {
+export async function focusCanvas(page: Page): Promise<void> {
   try {
     await page.locator(CANVAS).focus();
   } catch {
@@ -172,7 +172,7 @@ async function resolveEntityPosition(
  * `event`/win-path driver can stay generic (resolve the target by role, derive
  * movement keys from the documented controls).
  */
-async function fireInput(
+export async function fireInput(
   page: Page,
   input: GddInput | undefined,
   ctx: GddContext,

@@ -2,7 +2,7 @@
 
 _Hermes INIT map. The single answer to "what is our skill system, and what workflow orchestrates it?"
 Free-form, no scores. Evolves and gets more certain with every run — append responsibilities, notes, and
-diagnostics as we learn them; a stale map is the one real failure mode. Last refreshed: 2026-06-09._
+diagnostics as we learn them; a stale map is the one real failure mode. Last refreshed: 2026-06-10._
 
 ## What this system is
 An AI **game-generation engine**: one prompt → a verified, playable Phaser 2D web game in one pass.
@@ -34,11 +34,11 @@ gameness); W4 EXECUTE has zero design latitude in between. The human is steward,
 |---|---|---|---|---|---|
 | **W0 Classify** | Designer | `packages/skills/classify-game/SKILL.md` (+`classification.schema.json`) | `args.prompt` | `spec/classification.json` (archetype · coreLoop · coreVerb · physicsProfile · **scopeCut**) | the classification |
 | **W1 Spec** | Designer | `packages/skills/write-gdd/SKILL.md` (+`gdd.schema.json`) | `spec/classification.json` | `spec/gdd.json` (slim gameDNA + **2–5 milestones** + per-milestone assertions; the design THESIS that VERIFY-1 hardens) + `spec/PLAN.md` | the gdd |
-| **VERIFY-1 Design** | Design Critic (pre-code, static) | `packages/skills/verify-design/SKILL.md` (+`blueprint.schema.json` — TODO) | `spec/gdd.json` + `spec/classification.json` + `spec/PLAN.md` | **`spec/blueprint.json`** — the HARDENED, frozen, winnable design, the **NEW single source of truth**: complete `config` · concrete `layout` (coords+routes+timings) · `coupling` (threat-on-reward-path, proven) · `referenceSolution` · Given/When/Then `acceptanceCriteria` · `declaredRanges` (perturbation envelope) · `verdict` — plus `spec/DESIGN_REVIEW.md` | the blueprint + `verdict.result` |
+| **VERIFY-1 Design** | Design Critic (pre-code, static) | `packages/skills/verify-design/SKILL.md` (+`blueprint.schema.json` ✓) | `spec/gdd.json` + `spec/classification.json` + `spec/PLAN.md` | **`spec/blueprint.json`** — the HARDENED, frozen, winnable design, the **NEW single source of truth**: complete `config` · concrete `layout` (coords+routes+timings) · `coupling` (threat-on-reward-path, proven) · `referenceSolution` · Given/When/Then `acceptanceCriteria` · `declaredRanges` (perturbation envelope) · `verdict` — plus `spec/DESIGN_REVIEW.md` | the blueprint + `verdict.result` |
 | **W2 Scaffold** | Coder | `packages/skills/scaffold/SKILL.md` (+`template-contract.md`, `index.schema.json`) | **`spec/blueprint.json`** (`.config` is COMPLETE — fixes the config-drop class) | empty building project + `STRUCTURE.md` + `index.json` (asset slots); exposes **`window.__GAME__`** | status receipt |
 | **W3 Assets** | Artist | `packages/skills/assets/SKILL.md` (+`assets.schema.json`) | `index.json` + `spec/blueprint.json` (art style) | `public/assets/*` + `ASSETS.md`; writes back `index.json` path+status | status receipt |
-| **W4 Execute** | Executor (**zero design latitude**) | `packages/skills/implement-milestone/SKILL.md` (skill-text rescope to executor — TODO) | **`spec/blueprint.json`** (`layout`/`coupling`/`config`/`referenceSolution`/`acceptanceCriteria`) + `STRUCTURE.md` + `MEMORY.md` + `index.json` keys + `template-contract.md` | `src/**` built **VERBATIM** (entities at blueprint coords, threats on blueprint routes, the blueprint RESPAWN flow); populates `window.__GAME__` for real; **HALT+escalate on a missing blueprint number — never invent** | built/failed |
-| **VERIFY-2 QA** | Playtester (impl-fidelity, **NOT gameness**) | `packages/skills/verify/SKILL.md` (+`assertion-execution-grammar.md`, `perturbation-grammar.md` — TODO, `report.schema.json`) | the built game + `spec/blueprint.json` (`.referenceSolution`/`.acceptanceCriteria`/`.declaredRanges`) + `window.__GAME__` + `MEMORY.md` | `verify/report.M<id>.json` (**per-milestone**) + screenshots; bounded ≤3 self-fix (impl bugs only) OR `verify/escalations.M<id>.json` | `VALIDATION_PASSED/FAILED` marker |
+| **W4 Execute** | Executor (**zero design latitude**) | `packages/skills/implement-milestone/SKILL.md` (rescoped Coder→Executor ✓) | **`spec/blueprint.json`** (`layout`/`coupling`/`config`/`referenceSolution`/`acceptanceCriteria`) + `STRUCTURE.md` + `MEMORY.md` + `index.json` keys + `template-contract.md` | `src/**` built **VERBATIM** (entities at blueprint coords, threats on blueprint routes, the blueprint RESPAWN flow); populates `window.__GAME__` for real; **HALT+escalate on a missing blueprint number — never invent** | built/failed |
+| **VERIFY-2 QA** | Playtester (impl-fidelity, **NOT gameness**) | `packages/skills/verify/SKILL.md` (+`assertion-execution-grammar.md` + `perturbation-grammar.md` ✓ + `report.schema.json` extended ✓ + harness engine) | the built game + `spec/blueprint.json` (`.referenceSolution`/`.acceptanceCriteria`/`.declaredRanges`) + `window.__GAME__` + `MEMORY.md` | `verify/report.M<id>.json` (**per-milestone**) + screenshots; bounded ≤3 self-fix (impl bugs only) OR `verify/escalations.M<id>.json` | `VALIDATION_PASSED/FAILED` marker |
 
 ### The load-bearing cross-node contracts — `spec/blueprint.json` + `window.__GAME__`
 Two linchpins now. **`spec/blueprint.json`** (VERIFY-1's hardened, frozen design) is the single source of truth
@@ -63,13 +63,16 @@ template exposes it → **W4** populates it from real state → **VERIFY-2** rea
 All seven node skills live under `packages/skills/<name>/`. Owners of node CRAFT; the chain is owned by
 game-omni.js. Each skill cites its provenance inline (repo path or URL) — no rule rests on imagination.
 - `classify-game/` · `write-gdd/` · **`verify-design/`** (VERIFY-1 — the design-quality gate; owns
-  `blueprint.schema.json` — TODO) · `scaffold/` (also owns `template-contract.md` — the hook/template
+  `blueprint.schema.json` ✓) · `scaffold/` (also owns `template-contract.md` — the hook/template
   contract) · `assets/` · `implement-milestone/` (W4 EXECUTE — executor) · `verify/` (VERIFY-2 — impl/QA;
-  owns `assertion-execution-grammar.md` + `perturbation-grammar.md` — TODO + `report.schema.json`).
-- **Open authoring (this redesign):** `verify-design/blueprint.schema.json` (validator for `spec/blueprint.json`),
-  `verify/perturbation-grammar.md` + `perturbation.ts` (the isomorphic-permutation engine), the
-  `implement-milestone/SKILL.md` text rescope (Coder→Executor: build the blueprint verbatim, HALT+escalate on a
-  missing number), and the per-milestone `report.M<id>.json` writer (today's `report.ts` overwrites one file).
+  owns `assertion-execution-grammar.md` + `perturbation-grammar.md` ✓ + `report.schema.json` ✓).
+- **Built (this redesign, 2026-06-10):** `verify-design/blueprint.schema.json` (validator for `spec/blueprint.json`;
+  `declaredRanges` = flat `{parameterPath:[min,max]}`) · `verify/perturbation-grammar.md` + the harness engine
+  (`packages/verify/src/{perturbation,completability,invariants,escalation,blueprint}.ts` + per-milestone
+  `report.M<id>.json` writer + the six-gate `bin/verify-milestone.ts`) · `implement-milestone/SKILL.md` Coder→Executor
+  rescope · the extended `verify/report.schema.json`. Harness `tsc --noEmit` green; chain `extract.mjs` → 11 stages.
+- **Still open:** a fresh end-to-end validation run on a real game (chromium not yet exercised) + 3 minor contract
+  refinements (`acceptanceCriteria`↔assertion id-link, `rng.seed` frozen-original, baked-config rebuild cost on Pi).
 
 ## Governing docs (owners too)
 - `status.md` — project entry point. `design/pipeline-design-v1.md` — the why (waves, milestone policy,
@@ -296,6 +299,21 @@ session can retrace the evidence behind any edit. A claim with no doc on disk is
   `verify-design/blueprint.schema.json`, `verify/perturbation-grammar.md` + `perturbation.ts`, the
   `implement-milestone/SKILL.md` Coder→Executor text rescope, the per-milestone `report.M<id>.json` writer; then a
   fresh validation run. (commit: skillsys(game-omni) — this entry; research doc: `~/.claude/research/verify-node-construction-best-practices.md`.)
+- 2026-06-10 — `verify-design/blueprint.schema.json` (NEW) + `verify/perturbation-grammar.md` (NEW) +
+  `verify/report.schema.json` (extended) + `implement-milestone/SKILL.md` (Coder→Executor) + the `packages/verify/`
+  harness engine (NEW `perturbation.ts`/`completability.ts`/`invariants.ts`/`escalation.ts`/`blueprint.ts`; per-milestone
+  `report.M<id>.json`; six-gate `bin/verify-milestone.ts`) — **BUILT the executable substrate the redesign left open**
+  (the four follow-ups in the entry above). The separation of powers is now REAL IN CODE, not prose: VERIFY-2's
+  perturbation / completability / invariant gates run MECHANICALLY in the immutable harness (previously described only
+  in the SKILL — i.e. the LLM still partly graded its own drive, the very coupling the redesign set out to remove).
+  Committed contract decisions: `declaredRanges` = flat `{parameterPath:[min,max]}`; perturbation seams = RUNTIME
+  (`commands.setState`/`seed`, no rebuild) + BAKED-CONFIG (permuted `gameConfig.json` + ONE rebuild, reverted);
+  legal-precondition predicate (a `setState` field must be neither the observed field nor a one-step causal input of
+  the check under test); `acceptanceCriteria` canonical, gdd `assertions[]` fallback. Built via DAG fan-out (3 parallel
+  authors → 1 harness integrator → integration verify). Verify: `node --check` green · `tsc --noEmit` exit 0 ·
+  `extract.mjs` → 11 stages. OPEN: a fresh chromium validation run + 3 minor contract refinements
+  (`acceptanceCriteria`↔assertion id-link; `rng.seed` frozen-original; confirm baked-config rebuild cost on the Pi
+  budget). (commit: skillsys(game-omni) — this entry; research doc: `~/.claude/research/verify-node-construction-best-practices.md`.)
 - _(future flaws/fixes append here so repeat-flaws become visible and the next diagnosis starts ahead.)_
 
 ## Stewardship note

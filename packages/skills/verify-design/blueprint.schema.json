@@ -1,0 +1,612 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://game-omni/spec/blueprint.schema.json",
+  "$comment": "VERIFY-1 frozen-design artifact. Strict superset of write-gdd/gdd.schema.json: carries all gdd fields (config now REQUIRED) and adds layout/coupling/feasibility/referenceSolution/acceptanceCriteria/declaredRanges/verdict. declaredRanges uses a FLAT MAP: { \"<parameterPath>\": [min, max] } where parameterPath is a dotted string (e.g. \"config.walkSpeed\" or \"layout.rewards.coin_1.x\"). Every value is a 2-element [min,max] number tuple. VERIFY-2 reads this map to enumerate the perturbation envelope.",
+  "title": "VERIFY-1 blueprint artifact (hardened, approved design)",
+  "description": "The frozen, approved design emitted by VERIFY-1 (Design Critic). Extends gdd.schema.json: carries all gdd fields (config now REQUIRED and complete) plus layout/coupling/feasibility/referenceSolution/acceptanceCriteria/declaredRanges/verdict. Downstream nodes W2/W4/VERIFY-2 read this as single source of truth.",
+  "type": "object",
+  "additionalProperties": false,
+
+  "required": [
+    "meta",
+    "entities",
+    "mechanics",
+    "controls",
+    "winCondition",
+    "loseCondition",
+    "config",
+    "assetList",
+    "milestones",
+    "layout",
+    "coupling",
+    "feasibility",
+    "referenceSolution",
+    "acceptanceCriteria",
+    "declaredRanges",
+    "verdict"
+  ],
+
+  "properties": {
+
+    "$schema": { "type": "string" },
+
+    "meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "archetype", "coreLoop", "coreVerb", "artStyle"],
+      "description": "Game identity. archetype/coreLoop/coreVerb are carried verbatim from classification.json; title is derived by W1.",
+      "properties": {
+        "title": { "type": "string", "minLength": 1, "description": "Short game title (<=6 words)." },
+        "archetype": {
+          "type": "string",
+          "enum": ["platformer", "top_down", "grid_logic", "tower_defense", "ui_heavy"],
+          "description": "Copied from classification.json. Routes W2 to templates/modules/<archetype>."
+        },
+        "coreLoop": { "type": "string", "minLength": 1 },
+        "coreVerb": { "type": "string", "minLength": 1 },
+        "coreFantasy": { "type": "string" },
+        "artStyle": { "type": "string", "minLength": 1 },
+        "physicsProfile": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "hasGravity": { "type": "boolean" },
+            "perspective": { "type": "string", "enum": ["side", "top_down", "none"] },
+            "movementType": { "type": "string", "enum": ["continuous", "grid", "path", "ui_only"] }
+          }
+        }
+      }
+    },
+
+    "subMode": {
+      "type": "string",
+      "description": "Optional within-archetype variant hint for W4 (e.g. grid_logic: 'puzzle'|'tactics'; top_down: 'arena'). Advisory in v1."
+    },
+
+    "entities": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Every game object. Player MUST be entity[0] (role:'player').",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "role", "description"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "role": {
+            "type": "string",
+            "enum": ["player", "enemy", "obstacle", "collectible", "goal", "projectile", "tower", "ui"]
+          },
+          "description": { "type": "string", "minLength": 1 },
+          "behaviors": { "type": "array", "items": { "type": "string" } },
+          "assetSlot": { "type": "string" }
+        }
+      }
+    },
+
+    "mechanics": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "description"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "description": { "type": "string", "minLength": 1 },
+          "capability": { "type": "string" }
+        }
+      }
+    },
+
+    "controls": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["input", "action"],
+        "properties": {
+          "input": { "type": "string", "minLength": 1 },
+          "action": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+
+    "winCondition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["description", "observable"],
+      "properties": {
+        "description": { "type": "string", "minLength": 1 },
+        "observable": { "type": "string", "minLength": 1 }
+      }
+    },
+
+    "loseCondition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["description", "observable"],
+      "properties": {
+        "description": { "type": "string", "minLength": 1 },
+        "observable": { "type": "string", "minLength": 1 }
+      }
+    },
+
+    "config": {
+      "type": "object",
+      "description": "REQUIRED and COMPLETE in the blueprint. Tuning numbers W2 merges into the template gameConfig.json. Keys must match the archetype's config schema. Per-archetype valid keys — platformer: gravityY, jumpPower, walkSpeed, maxHealth, attackDamage, hurtingDuration, invulnerableTime; top_down: walkSpeed, dashSpeed, dashDuration, dashCooldown, maxHealth, attackDamage; grid_logic: cellSize, gridWidth, gridHeight, maxMoves, animationSpeed, inputDebounceMs; tower_defense: startingGold, startingLives, cellSize, timeBetweenWaves, sellRefundRate; ui_heavy: playerMaxHP, enemyMaxHP, handSize, comboTiers.",
+      "additionalProperties": { "type": "number" },
+      "minProperties": 1
+    },
+
+    "assetList": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["slot", "type", "description"],
+        "properties": {
+          "slot": { "type": "string", "minLength": 1 },
+          "type": {
+            "type": "string",
+            "enum": ["sprite", "animation", "tileset", "background", "image", "audio"]
+          },
+          "description": { "type": "string", "minLength": 1 },
+          "frames": { "type": "array", "items": { "type": "string" } },
+          "width": { "type": "integer", "minimum": 1 },
+          "height": { "type": "integer", "minimum": 1 }
+        }
+      }
+    },
+
+    "milestones": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 5,
+      "description": "Carried from gdd, hardened against concrete numbers. 2–5 playable vertical slices.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "goal", "acceptanceCriteria", "assertions"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^M[1-9][0-9]*$" },
+          "name": { "type": "string", "minLength": 1 },
+          "goal": { "type": "string", "minLength": 1 },
+          "acceptanceCriteria": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "assertions": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "$ref": "#/$defs/assertion" }
+          }
+        }
+      }
+    },
+
+    "layout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["playerSpawn", "goal", "bounds"],
+      "description": "Concrete level placement. The level is fully determined — no missing coordinate. Supports both continuous (x/y) and discrete (gridX/gridY) archetypes via open coordinate objects.",
+      "properties": {
+        "playerSpawn": { "$ref": "#/$defs/coordinate" },
+        "goal": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["id"],
+          "description": "The win target entity: id + position. x/y for continuous archetypes; gridX/gridY for grid_logic.",
+          "properties": {
+            "id": { "type": "string", "minLength": 1 },
+            "x": { "type": "number" },
+            "y": { "type": "number" },
+            "gridX": { "type": "integer", "minimum": 0 },
+            "gridY": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "rewards": {
+          "type": "array",
+          "description": "Collectibles and intermediate targets. Each has an id + position.",
+          "items": { "$ref": "#/$defs/placedEntity" }
+        },
+        "threats": {
+          "type": "array",
+          "description": "Hazards, enemies, patrollers. Each has id + kind + position or route + timing.",
+          "items": { "$ref": "#/$defs/threat" }
+        },
+        "bounds": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["width", "height"],
+          "description": "Level dimensions in pixels (continuous) or cells (grid_logic).",
+          "properties": {
+            "width": { "type": "number", "exclusiveMinimum": 0 },
+            "height": { "type": "number", "exclusiveMinimum": 0 }
+          }
+        }
+      }
+    },
+
+    "coupling": {
+      "type": "array",
+      "description": "Threat-on-reward-path proof (§4). Every reward/goal must have at least one entry proving a threat contests it. VERIFY-2 reads this to confirm the build recreates the tension.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["for", "threat", "meetsAt", "passableWindowMs"],
+        "properties": {
+          "for": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The reward or goal id this coupling entry describes (e.g. 'coin_1', 'exit')."
+          },
+          "threat": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The threat entity id that contests it (e.g. 'patrol_1')."
+          },
+          "meetsAt": {
+            "$ref": "#/$defs/coordinate",
+            "description": "Coordinates where the player path intersects the threat region."
+          },
+          "passableWindowMs": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "The timing window in ms during which the reward/goal is safely reachable (from §3 math). Must be > 0 for the design to be winnable+fair."
+          },
+          "note": {
+            "type": "string",
+            "description": "Human-readable rationale: why the threat is on this path and what the decision is."
+          }
+        }
+      }
+    },
+
+    "feasibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["archetype", "checks"],
+      "description": "The kinematic/reachability math (§3). All numbers recorded for human audit. Archetype selects which math applies.",
+      "properties": {
+        "archetype": {
+          "type": "string",
+          "enum": ["platformer", "top_down", "grid_logic", "tower_defense", "ui_heavy"]
+        },
+        "checks": {
+          "type": "array",
+          "minItems": 1,
+          "description": "One entry per required traversal/reach/survival window. Each records what was checked, the computed bounds, the required value, and the verdict.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["what", "computed", "required", "verdict", "numbersUsed"],
+            "properties": {
+              "what": {
+                "type": "string",
+                "minLength": 1,
+                "description": "What was checked (e.g. 'gap@x=320 width 96px', 'reach time to coin_1', 'BFS path length to goal', 'wave1 survivability DPS check')."
+              },
+              "computed": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "The derived values from the math (e.g. {h_max:159.8, d_max:206.7} or {shortestPath:14, D_total:120})."
+              },
+              "required": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "The design's constraint that was checked against (e.g. {gap:96} or {maxMoves:20} or {wave1HP:100})."
+              },
+              "verdict": {
+                "type": "string",
+                "enum": ["PASS", "FAIL", "HARDENED"],
+                "description": "PASS = satisfies as-is; FAIL = not satisfiable (design_failed); HARDENED = VERIFY-1 adjusted the number to make it pass."
+              },
+              "numbersUsed": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "Every concrete input number used in the computation (e.g. {v:200, vy0:620, g:1200}). Enables a human to re-run the arithmetic."
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "referenceSolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["winsVia", "steps", "engagesEveryThreat"],
+      "description": "Proof-by-existence that the design is winnable AND that winning requires engaging the threat (§3). VERIFY-2 replays this against the build.",
+      "properties": {
+        "winsVia": {
+          "type": "string",
+          "minLength": 1,
+          "description": "How the win is achieved (e.g. 'controls', 'BFS_solution', 'optimal_tower_placement'). Declares the replay strategy for VERIFY-2."
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Ordered action sequence. Each step has an 'input' (a documented control or event) and exactly one or more outcome keys.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["input"],
+            "description": "One step in the reference solution. 'input' is always required; at least one of reaches/clears/engagesThreat/observe+expect must be present to make the step checkable.",
+            "properties": {
+              "input": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The player action (e.g. 'keyHold ArrowRight 600ms', 'keyPress ArrowUp', 'navigate to coin_1 when patrol_1 at x<=400', 'BFS move sequence: U,R,R,D', 'place tower at cell (3,2)')."
+              },
+              "reaches": {
+                "type": "string",
+                "description": "A landmark or coordinate the player reaches after this step (e.g. 'gap@x=320', 'coin_1@(420,300)')."
+              },
+              "clears": {
+                "type": "string",
+                "description": "An obstacle or gap that is cleared/passed (e.g. 'gap (peak 140 > spike row 120)', 'wave 1')."
+              },
+              "engagesThreat": {
+                "type": "string",
+                "description": "The threat id that is engaged at this step (proves the decision is not avoided)."
+              },
+              "observe": {
+                "type": "string",
+                "description": "A __GAME__ observable to check after this step (e.g. 'status', 'score', 'moveCount')."
+              },
+              "expect": {
+                "type": ["string", "number", "boolean"],
+                "description": "The expected value of the observable (e.g. 'won', 3, true). Used when 'observe' is present."
+              }
+            }
+          }
+        },
+        "engagesEveryThreat": {
+          "type": "boolean",
+          "description": "True iff the reference solution engages every declared threat at least once (proving no threat is trivially avoidable in the intended play)."
+        }
+      }
+    },
+
+    "acceptanceCriteria": {
+      "type": "array",
+      "description": "Given/When/Then acceptance criteria expressed in the window.__GAME__ observable vocabulary (§3 of template-contract.md). VERIFY-2's fidelity contract — checked from known preconditions.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "milestone", "given", "when", "then", "observable", "expect"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^AC-M[1-9][0-9]*-.+$",
+            "description": "Acceptance criterion id, e.g. 'AC-M3-win', 'AC-M2-collect'."
+          },
+          "milestone": {
+            "type": "string",
+            "pattern": "^M[1-9][0-9]*$",
+            "description": "The milestone this AC belongs to (e.g. 'M3')."
+          },
+          "given": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Precondition in concrete terms (e.g. 'player at spawn (32,300), score 3 (all coins collected)'). Must reference hardened coordinates so VERIFY-2 can reproduce the state."
+          },
+          "when": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The trigger/action (e.g. 'fire controls toward exit per referenceSolution', 'press ArrowUp', 'wave 1 ends')."
+          },
+          "then": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The expected observable outcome as a __GAME__ expression (e.g. \"__GAME__.status === 'won'\", \"__GAME__.score >= 3\")."
+          },
+          "observable": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The __GAME__ field/path being observed (e.g. 'status', 'score', 'player.health', 'moveCount', 'gold', 'lives', 'waveIndex', 'playerHP', 'enemyHP')."
+          },
+          "expect": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Exactly one comparator key. Must use the same comparator vocabulary as gdd assertions.",
+            "minProperties": 1,
+            "maxProperties": 1,
+            "properties": {
+              "decreases": { "type": "boolean" },
+              "increases": { "type": "boolean" },
+              "changes": { "type": "boolean" },
+              "unchanged": { "type": "boolean" },
+              "equals": { "description": "Strict equality (number|string|boolean)." },
+              "atLeast": { "type": "number" },
+              "atMost": { "type": "number" }
+            }
+          }
+        }
+      }
+    },
+
+    "declaredRanges": {
+      "type": "object",
+      "description": "THE PERTURBATION ENVELOPE — a flat map from parameterPath (dotted string) to [min,max] 2-tuple. VERIFY-2 enumerates this map, permutes each parameter within its declared band, and re-runs acceptanceCriteria; a faithful build is invariant, a hard-coded build diverges. Every declared range MUST keep §3 feasibility + §4 threat-on-path properties true at BOTH endpoints. Example paths: 'config.walkSpeed', 'config.gravityY', 'layout.rewards.coin_1.x', 'layout.threats.patrol_1.speed', 'layout.playerSpawn.x'.",
+      "additionalProperties": {
+        "$ref": "#/$defs/range"
+      },
+      "minProperties": 1
+    },
+
+    "verdict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["result"],
+      "description": "The hard gate verdict. result is the machine-parseable field the workflow driver asserts. DESIGN_FAILED routes back to W1.",
+      "properties": {
+        "result": {
+          "type": "string",
+          "enum": ["DESIGN_PASSED", "DESIGN_FAILED"],
+          "description": "The hard gate (criteria 1-4 on the numbers). DESIGN_FAILED routes back to W1, never to W4."
+        },
+        "rubric": {
+          "type": "array",
+          "description": "Per-criterion record. One entry per rubric criterion (1-7).",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["criterion", "verdict", "evidence"],
+            "properties": {
+              "criterion": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Criterion name (e.g. 'interesting-decision', 'threat-on-reward-path', 'winnability', 'completeness', 'fantasy', 'onboarding', 'pillar-alignment')."
+              },
+              "verdict": {
+                "type": "string",
+                "enum": ["PASS", "FAIL", "HARDENED"],
+                "description": "PASS = satisfies as-is; FAIL = not satisfiable (triggers DESIGN_FAILED); HARDENED = VERIFY-1 fixed the design to pass."
+              },
+              "evidence": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The named principle + the observation (restating the design's purpose and judging against it, not a preference)."
+              },
+              "numbersUsed": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "Concrete numbers referenced in the evidence (for criteria 1-4 math-based checks)."
+              }
+            }
+          }
+        },
+        "hardened": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "What VERIFY-1 made concrete that W1 left implicit (e.g. 'filled patrol_1 route+speed', 'added respawn flow')."
+        },
+        "reasons": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "On DESIGN_FAILED: the specific criterion + numbers that could not be satisfied. Empty array on DESIGN_PASSED."
+        }
+      }
+    }
+  },
+
+  "$defs": {
+
+    "coordinate": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "A position. For continuous archetypes: x/y in pixels. For grid_logic: gridX/gridY in cell indices. Both may be present. Additional keys allowed for archetype-specific data.",
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "gridX": { "type": "integer", "minimum": 0 },
+        "gridY": { "type": "integer", "minimum": 0 }
+      }
+    },
+
+    "placedEntity": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id"],
+      "description": "A named entity at a concrete position (reward, obstacle, etc.). id is required; position may be x/y (continuous) or gridX/gridY (grid_logic) or both.",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "gridX": { "type": "integer", "minimum": 0 },
+        "gridY": { "type": "integer", "minimum": 0 }
+      }
+    },
+
+    "threat": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id", "kind"],
+      "description": "A threat entity. 'kind' selects the motion model. Patrol threats carry route+speed+periodMs. Static hazards carry x/y only. Chasers carry speed. Grid threats carry gridX/gridY. Additional keys allowed per archetype.",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "kind": {
+          "type": "string",
+          "enum": ["patrol", "static_hazard", "chaser", "turret", "wave_enemy", "grid_blocker"],
+          "description": "Motion/behavior model. patrol=waypoint loop; static_hazard=no motion; chaser=follows player; turret=ranged; wave_enemy=spawned on wave; grid_blocker=occupies cells."
+        },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "gridX": { "type": "integer", "minimum": 0 },
+        "gridY": { "type": "integer", "minimum": 0 },
+        "route": {
+          "type": "array",
+          "minItems": 2,
+          "description": "Ordered waypoints for patrol threats.",
+          "items": { "$ref": "#/$defs/coordinate" }
+        },
+        "speed": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Movement speed in px/s (continuous archetypes) or cells/turn (grid)."
+        },
+        "periodMs": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Full patrol cycle duration in ms (computed from route length + speed, or explicitly set). Must keep the §3 passable window > 0."
+        }
+      }
+    },
+
+    "range": {
+      "type": "array",
+      "items": { "type": "number" },
+      "minItems": 2,
+      "maxItems": 2,
+      "description": "A [min, max] perturbation band for a parameter. Both endpoints must keep §3 feasibility and §4 threat-on-path properties true."
+    },
+
+    "assertion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "describe", "observe", "expect"],
+      "description": "Executable runtime check (carried from gdd milestones, hardened with blueprint coordinates). W5/VERIFY-2 fires input and asserts observe against expect.",
+      "properties": {
+        "id": { "type": "string", "pattern": "^M[1-9][0-9]*-A[1-9][0-9]*$" },
+        "describe": { "type": "string", "minLength": 1 },
+        "setup": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "scene": { "type": "string" },
+            "state": { "type": "object" }
+          }
+        },
+        "input": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": { "type": "string", "enum": ["keyPress", "keyHold", "click", "event", "none"] },
+            "key": { "type": "string" },
+            "durationMs": { "type": "integer", "minimum": 0 },
+            "target": { "type": "string" }
+          }
+        },
+        "observe": { "type": "string", "minLength": 1 },
+        "expect": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "decreases": { "type": "boolean" },
+            "increases": { "type": "boolean" },
+            "changes": { "type": "boolean" },
+            "unchanged": { "type": "boolean" },
+            "equals": { "description": "Strict equality (number|string|boolean)." },
+            "atLeast": { "type": "number" },
+            "atMost": { "type": "number" }
+          }
+        }
+      }
+    }
+
+  }
+}

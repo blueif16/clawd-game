@@ -23,9 +23,22 @@ import {
   type GddContext,
 } from './compile.js';
 import { OBSERVE_INIT_SCRIPT } from './observe.js';
-import { formatPassed, formatFailed, formatBootFailed, formatBoundExhausted } from './marker.js';
+import {
+  formatPassed,
+  formatFailed,
+  formatBootFailed,
+  formatBoundExhausted,
+  formatAggregatePassed,
+  formatAggregateFailed,
+  formatDesignEscalation,
+} from './marker.js';
 import { runAdvisoryVlm, type AdvisoryVlm } from './vlm.js';
-import { buildReport, writeReport, type VerifyReport } from './report.js';
+import {
+  buildReport,
+  writeReport,
+  type VerifyReport,
+  type FidelityResult,
+} from './report.js';
 import {
   MAX_FIX_CYCLES,
   readAttempts,
@@ -34,6 +47,18 @@ import {
   isBoundExhausted,
   reportableFixCycles,
 } from './fixcycles.js';
+import { InvariantSampler, type InvariantResult } from './invariants.js';
+import {
+  runCompletability,
+  type CompletabilityResult,
+} from './completability.js';
+import {
+  runPerturbation,
+  type PerturbationRecord,
+  type OriginalVerdict,
+} from './perturbation.js';
+import { writeEscalation, type EscalationRecord } from './escalation.js';
+import type { Blueprint, AcceptanceCriterion } from './blueprint.js';
 
 const VIEWPORT = { width: 800, height: 600 };
 const BOOT_NAV_TIMEOUT_MS = 30000;
@@ -455,4 +480,369 @@ export async function runMilestone(opts: {
   } finally {
     await teardown(state);
   }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// VERIFY-2 SIX-GATE ORCHESTRATION (SKILL §2–§9)
+// (1) build-health → (2) fidelity → (3) completability → (4) invariants →
+// (5) perturbation → (6) aggregate. Driven from spec/blueprint.json; falls back
+// to the gdd assertions[] when blueprint.acceptanceCriteria is absent (so the
+// harness still runs on older projects). The fixcycles counter stays
+// harness-owned; always exit 0 (the marker is the gate).
+// ════════════════════════════════════════════════════════════════════════════
+
+export interface RunMilestoneV2Opts {
+  projectDir: string;
+  milestoneId: string;
+  /** The milestone's executable gdd assertions (1:1 with acceptanceCriteria). */
+  assertions: GddAssertion[];
+  /** The full blueprint (sections .layout/.referenceSolution/.declaredRanges/…). */
+  blueprint: Blueprint;
+  /** Entity + control tables for the generic driver (read off blueprint/gdd). */
+  context?: GddContext;
+  /** The win observable (default 'status'); from blueprint.winCondition.observable. */
+  winObservable?: string;
+  greenOnEntry?: boolean;
+  permutationSeed?: number;
+}
+
+/**
+ * Resolve the win observable to read for completability/perturbation. The
+ * winCondition.observable is free text (e.g. "__GAME__.status === 'won'"); we
+ * extract the bare path. Default 'status'.
+ */
+function resolveWinObservable(bp: Blueprint, override?: string): string {
+  if (override) return override;
+  const raw = (bp as any).winCondition?.observable;
+  if (typeof raw === 'string') {
+    // pull the first __GAME__.<path> or bare identifier path.
+    const m = raw.match(/__GAME__\.([a-zA-Z_][\w.]*)/) || raw.match(/^([a-zA-Z_][\w.]*)/);
+    if (m) {
+      const path = m[1];
+      // strip a comparison tail if the regex grabbed one ('status === ...').
+      return path.split(/\s|=/)[0] || 'status';
+    }
+  }
+  return 'status';
+}
+
+/**
+ * Run the SIX gates for one milestone. Returns the same RunResult shape as
+ * runMilestone (report + verbatim marker + report path).
+ */
+export async function runMilestoneVerify2(opts: RunMilestoneV2Opts): Promise<RunResult> {
+  const startedAt = new Date().toISOString();
+  const t0 = Date.now();
+  const { projectDir, milestoneId, assertions, blueprint } = opts;
+  const ctx: GddContext = opts.context ?? {};
+  const greenOnEntry = opts.greenOnEntry ?? true;
+  const winObservable = resolveWinObservable(blueprint, opts.winObservable);
+
+  // ── STRUCTURAL ≤N SELF-FIX BOUND (identical to runMilestone) ───────────────
+  const { attempts, lastFailures } = readAttempts(projectDir, milestoneId);
+  if (isBoundExhausted(attempts)) {
+    const markerLine = formatBoundExhausted(MAX_FIX_CYCLES, lastFailures);
+    const summary = `self-fix bound (${MAX_FIX_CYCLES}) exhausted — ${
+      lastFailures && lastFailures.trim() ? lastFailures.trim() : 'last verify failed'
+    }`;
+    const report = buildReport({
+      milestoneId,
+      passed: false,
+      summary,
+      results: [],
+      advisoryVlm: { ran: false, flag: 'skipped' },
+      screenshots: [],
+      consoleErrors: [],
+      startedAt,
+      durationMs: Date.now() - t0,
+      bootFailed: false,
+      greenOnEntry,
+      fixCycles: MAX_FIX_CYCLES,
+    });
+    report.fixOutcome = 'exhausted';
+    const reportPath = writeReport(projectDir, report);
+    return { report, markerLine, reportPath };
+  }
+  const fixCycles = reportableFixCycles(attempts);
+
+  const distDir = resolveDistDir(projectDir);
+  const screenshots: string[] = [];
+
+  // ── GATE 1: BUILD-HEALTH (boot the built game headless, reach ready) ───────
+  const state = await boot(distDir);
+
+  try {
+    if (state.bootFailed) {
+      const shot = join('verify', `${milestoneId}-boot-failed.png`);
+      await state.page.screenshot({ path: join(projectDir, shot), fullPage: false }).catch(() => {});
+      if (existsSync(join(projectDir, shot))) screenshots.push(shot);
+      const advisoryVlm = await runAdvisoryVlm(state.page);
+      const markerLine = formatBootFailed(state.bootError);
+      const summary = `game did not become ready (boot failed)`;
+      const report = buildReport({
+        milestoneId,
+        passed: false,
+        summary,
+        results: [],
+        advisoryVlm,
+        screenshots,
+        consoleErrors: state.consoleErrors,
+        startedAt,
+        durationMs: Date.now() - t0,
+        bootFailed: true,
+        greenOnEntry,
+        fixCycles,
+      });
+      report.fixOutcome = 'boot_failed';
+      const reportPath = writeReport(projectDir, report);
+      recordFailedAttempt(projectDir, milestoneId, attempts, summary);
+      return { report, markerLine, reportPath };
+    }
+
+    // The invariant sampler runs THROUGH every drive (gate 2) + the replay (gate 3).
+    const sampler = new InvariantSampler();
+    await sampler.sample(state.page, true); // baseline sample at ready
+
+    // ── GATE 2: USER-FLOW FIDELITY (each assertion as Given/When/Then) ───────
+    // The gdd assertions are the executable form of the acceptanceCriteria
+    // (D3: acceptanceCriteria is canonical for the GIVEN; assertions[] are the
+    // executable fallback we drive). We attach each acceptance criterion's GIVEN
+    // for the report's fidelity[].given when ids line up.
+    const acByAssertion = mapAcceptanceToAssertions(blueprint.acceptanceCriteria, assertions, milestoneId);
+    const fidelity: FidelityResult[] = [];
+    const originalVerdicts: OriginalVerdict[] = [];
+    const resultsForSchema: AssertionResult[] = [];
+
+    for (const assertion of assertions) {
+      const result = await executeAssertion(state.page, assertion, ctx);
+      await sampler.sample(state.page, true);
+      resultsForSchema.push(result);
+      originalVerdicts.push({
+        assertion,
+        passed: result.status === 'pass',
+        observed: result.observed,
+      });
+      let screenshot: string | undefined;
+      if (result.status !== 'pass') {
+        const shot = join('verify', `${assertion.id}-fail.png`);
+        await state.page.screenshot({ path: join(projectDir, shot), fullPage: false }).catch(() => {});
+        if (existsSync(join(projectDir, shot))) {
+          screenshot = shot;
+          screenshots.push(shot);
+        }
+      }
+      fidelity.push({
+        id: assertion.id,
+        describe: assertion.describe,
+        ...(acByAssertion.get(assertion.id)?.given ? { given: acByAssertion.get(assertion.id)!.given } : {}),
+        observe: result.observe,
+        comparator: result.comparator,
+        expected: result.expected,
+        observed: normalizeObserved(result.observed),
+        status: result.status,
+        ...(result.message ? { message: result.message } : {}),
+        ...(screenshot ? { screenshot } : {}),
+      });
+    }
+    const fidelityFailures = fidelity.filter((f) => f.status !== 'pass');
+
+    // ── GATE 3: COMPLETABILITY (replay the reference intended solution) ──────
+    const completability: CompletabilityResult = await runCompletability(
+      state.page,
+      blueprint.referenceSolution,
+      ctx,
+      winObservable,
+      sampler,
+    );
+
+    // ── GATE 4: INVARIANTS (evaluate the sampled trace) ─────────────────────
+    const invariants: InvariantResult[] = sampler.evaluate(blueprint.layout);
+    const invariantViolations = invariants.filter((i) => !i.held);
+
+    // ── GATE 5: PERTURBATION (re-run originally-passing checks permuted) ────
+    let perturbation: PerturbationRecord = { ran: false, invariant: false };
+    try {
+      perturbation = await runPerturbation({
+        projectDir,
+        page: state.page,
+        reboot: (d) => boot(d),
+        teardown: (s) => teardown(s),
+        blueprint,
+        assertions,
+        originalVerdicts,
+        ctx,
+        winObservable,
+        permutationSeed: opts.permutationSeed,
+        resolveDistDir,
+        // §7 scope: permuted completability is in scope only if it passed originally.
+        originalCompletabilityPassed: completability.ran && completability.status === 'pass',
+      });
+    } catch (err) {
+      // A perturbation engine error is a verdict-correctness issue (§11), not a
+      // build divergence: record ran:true invariant:true so it never false-blocks
+      // a faithful build, with a console note.
+      state.consoleErrors.push(`perturbation engine error (non-blocking): ${String(err)}`);
+      perturbation = { ran: true, invariant: true, permutationsApplied: [], diverged: [] };
+    }
+
+    // End-state screenshot.
+    const endShot = join('verify', `${milestoneId}-end.png`);
+    await state.page.screenshot({ path: join(projectDir, endShot), fullPage: false }).catch(() => {});
+    if (existsSync(join(projectDir, endShot))) screenshots.push(endShot);
+
+    const advisoryVlm = await runAdvisoryVlm(state.page);
+
+    // ── GATE 6: AGGREGATE → the verbatim marker (SKILL §7) ──────────────────
+    // A missing reference solution makes completability un-runnable AND
+    // perturbation may report ran:false on a missing declaredRanges — these are
+    // VERIFY-1 contract gaps → a DESIGN ESCALATION (not a build pass), per §8.
+    const escalation = detectDesignEscalation(milestoneId, completability, perturbation, blueprint);
+
+    const completabilityFailed = completability.ran && completability.status !== 'pass';
+    const perturbationDiverged = perturbation.ran && perturbation.invariant === false;
+    const perturbationIncomplete = !perturbation.ran; // missing declaredRanges → incomplete
+
+    const failureDescribes: string[] = [];
+    for (const f of fidelityFailures) failureDescribes.push(f.message ? `${f.describe} (${f.message})` : f.describe);
+    if (completabilityFailed) failureDescribes.push(`completability: ${completability.message ?? 'intended solution did not reach the win'}`);
+    for (const v of invariantViolations) failureDescribes.push(`invariant '${v.name}' violated${v.evidence ? `: ${v.evidence}` : ''}`);
+    if (perturbationDiverged) {
+      for (const d of perturbation.diverged ?? [])
+        failureDescribes.push(`${d.checkId} diverged under permutation (${d.permutation}): real build invariant, this build not`);
+    }
+
+    let markerLine: string;
+    let summary: string;
+
+    const passed =
+      fidelityFailures.length === 0 &&
+      !completabilityFailed &&
+      invariantViolations.length === 0 &&
+      perturbation.ran === true &&
+      perturbation.invariant === true &&
+      !escalation;
+
+    if (escalation) {
+      // A design defect routes upstream — emit the design-escalation marker.
+      markerLine = formatDesignEscalation(escalation.note);
+      summary = `design escalation — ${escalation.note}`;
+    } else if (passed) {
+      const totalChecks = fidelity.length + 1 /*completability*/ + invariants.length;
+      markerLine = formatAggregatePassed(milestoneId, totalChecks);
+      summary = `${milestoneId} all ${totalChecks} checks passed (fidelity + completability + invariants + perturbation)`;
+    } else {
+      if (perturbationIncomplete && failureDescribes.length === 0) {
+        // Nothing failed on the build, but the perturbation pass could not run
+        // (no declaredRanges) — the verify is INCOMPLETE (§11), surfaced honestly.
+        failureDescribes.push('perturbation pass incomplete (blueprint.declaredRanges absent — VERIFY-1 contract gap)');
+      }
+      markerLine = formatAggregateFailed(failureDescribes);
+      summary = failureDescribes.join('; ') || 'one or more gates failed';
+    }
+
+    const report = buildReport({
+      milestoneId,
+      passed,
+      summary,
+      results: resultsForSchema,
+      advisoryVlm,
+      screenshots,
+      consoleErrors: state.consoleErrors,
+      startedAt,
+      durationMs: Date.now() - t0,
+      bootFailed: false,
+      greenOnEntry,
+      fixCycles,
+      fidelity,
+      completability,
+      invariants,
+      perturbation,
+      ...(escalation ? { escalation } : {}),
+    });
+    const reportPath = writeReport(projectDir, report);
+
+    // Write the escalation sidecar IFF a design defect was flagged.
+    if (escalation) writeEscalation(projectDir, escalation);
+
+    // Update the harness-owned bound counter for the NEXT invocation.
+    if (passed) {
+      resetAttempts(projectDir, milestoneId);
+    } else {
+      recordFailedAttempt(projectDir, milestoneId, attempts, summary);
+    }
+
+    return { report, markerLine, reportPath };
+  } finally {
+    await teardown(state);
+  }
+}
+
+/**
+ * Normalize an AssertionResult.observed for the report (mirror report.ts): a
+ * relative {before, after} collapses undefined→null; a bare undefined→null.
+ */
+function normalizeObserved(observed: unknown): unknown {
+  if (observed && typeof observed === 'object' && 'after' in (observed as any)) {
+    const o = observed as { before: unknown; after: unknown };
+    return {
+      before: o.before === undefined ? null : o.before,
+      after: o.after === undefined ? null : o.after,
+    };
+  }
+  return observed === undefined ? null : observed;
+}
+
+/**
+ * Map each milestone gdd assertion to its acceptance criterion (for the report's
+ * fidelity[].given). The schema does not commit a hard id link, so we pair by
+ * milestone + ORDER (acceptanceCriteria filtered to this milestone, in order, are
+ * 1:1 with the milestone's assertions). Returns a map assertionId → criterion.
+ */
+function mapAcceptanceToAssertions(
+  criteria: AcceptanceCriterion[] | undefined,
+  assertions: GddAssertion[],
+  milestoneId: string,
+): Map<string, AcceptanceCriterion> {
+  const out = new Map<string, AcceptanceCriterion>();
+  if (!Array.isArray(criteria)) return out;
+  const forMilestone = criteria.filter((c) => c.milestone === milestoneId);
+  for (let i = 0; i < assertions.length && i < forMilestone.length; i += 1) {
+    out.set(assertions[i].id, forMilestone[i]);
+  }
+  return out;
+}
+
+/**
+ * Detect a DESIGN ESCALATION (§8): the blueprint itself is the issue. In the
+ * autonomous harness path this is reserved for an upstream CONTRACT GAP that the
+ * build cannot be blamed for — specifically, the referenceSolution is absent/empty
+ * so completability cannot be certified at all. A missing declaredRanges is
+ * surfaced as an INCOMPLETE perturbation (FAILED), not an escalation, because the
+ * build may still be faithful — it is the perturbation envelope (VERIFY-1's) that
+ * is missing. The richer build-vs-design discrimination is the agent's job (§8);
+ * the harness only escalates the unambiguous contract gap.
+ */
+function detectDesignEscalation(
+  milestoneId: string,
+  completability: CompletabilityResult,
+  _perturbation: PerturbationRecord,
+  blueprint: Blueprint,
+): EscalationRecord | undefined {
+  const hasRefSolution =
+    !!blueprint.referenceSolution &&
+    Array.isArray(blueprint.referenceSolution.steps) &&
+    blueprint.referenceSolution.steps.length > 0;
+  if (!hasRefSolution && completability.ran === false && /^M[1-9][0-9]*$/.test(milestoneId)) {
+    return {
+      milestoneId,
+      kind: 'design-defect',
+      evidence: {
+        check: 'completability',
+        observed: 'no reference solution to replay',
+        blueprintExpected: 'blueprint.referenceSolution.steps[] (the proven winning action-sequence)',
+      },
+      note: 'blueprint.referenceSolution absent — VERIFY-1 must emit the proven intended solution before completability can be certified',
+    };
+  }
+  return undefined;
 }

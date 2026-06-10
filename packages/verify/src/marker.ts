@@ -41,6 +41,38 @@ export function formatBootFailed(detail?: string): string {
 }
 
 /**
+ * Format the AGGREGATE PASS marker (SKILL §7) for the six-gate VERIFY-2 run.
+ * Verbatim: `VALIDATION_PASSED: <id> all <N> checks passed (fidelity +
+ * completability + invariants + perturbation)`. `n` = total checks that passed.
+ */
+export function formatAggregatePassed(milestoneId: string, n: number): string {
+  return `VALIDATION_PASSED: ${milestoneId} all ${n} checks passed (fidelity + completability + invariants + perturbation)`;
+}
+
+/**
+ * Format the AGGREGATE FAIL marker (SKILL §7) from the failed checks' describe
+ * strings ('; '-joined, the gamedevbench issues[] convention). A perturbation
+ * divergence's describe reads e.g. `M2-A1 diverged under permutation
+ * (coord-shift): real build invariant, this build not`.
+ */
+export function formatAggregateFailed(failedDescribes: string[]): string {
+  const joined = failedDescribes.filter((d) => d && d.trim()).join('; ');
+  return `VALIDATION_FAILED: ${joined || 'one or more gates failed'}`;
+}
+
+/**
+ * The DESIGN-ESCALATION marker variant (SKILL §8): a genuine design defect (the
+ * frozen blueprint itself is wrong / a step unwinnable even when built faithfully)
+ * is routed UPSTREAM, never fixed by bending the build. It is a VALIDATION_FAILED
+ * so the existing parser regex (`/VALIDATION_(PASSED|FAILED)(?::\s*(.+))?/`)
+ * still matches it as a fail — only the trailing message distinguishes it.
+ */
+export function formatDesignEscalation(line: string): string {
+  const tail = line && line.trim() ? line.trim() : 'blueprint design defect';
+  return `VALIDATION_FAILED: design escalation — ${tail}`;
+}
+
+/**
  * The bound-exhausted marker — the harness REFUSES to run another verify pass
  * because the structural ≤N self-fix bound is used up (emitted BEFORE booting, so
  * the cost is capped). It is an HONEST VALIDATION_FAILED carrying the last real

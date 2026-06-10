@@ -12,6 +12,27 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { AssertionResult } from './compile.js';
 import type { AdvisoryVlm } from './vlm.js';
+import type { InvariantResult } from './invariants.js';
+import type { CompletabilityResult } from './completability.js';
+import type { PerturbationRecord } from './perturbation.js';
+import type { EscalationRecord } from './escalation.js';
+
+/**
+ * A §3 fidelity check item (report.schema fidelity[]). Same observed-vs-expected
+ * shape as an assertion, plus the frozen GIVEN VERIFY-2 placed.
+ */
+export interface FidelityResult {
+  id: string;
+  describe: string;
+  given?: string;
+  observe: string;
+  comparator: AssertionResult['comparator'];
+  expected: unknown;
+  observed: unknown;
+  status: 'pass' | 'fail' | 'error';
+  message?: string;
+  screenshot?: string;
+}
 
 export interface VerifyReport {
   milestoneId: string;
@@ -29,6 +50,12 @@ export interface VerifyReport {
   fixOutcome?: 'passed_first_try' | 'fixed' | 'exhausted' | 'stalled' | 'boot_failed';
   advisoryVlm: AdvisoryVlm;
   regression?: { priorMilestonesChecked?: string[]; broke?: string[] };
+  // ── VERIFY-2 gate blocks (additive; OPTIONAL on the schema) ────────────────
+  fidelity?: FidelityResult[];
+  completability?: CompletabilityResult;
+  invariants?: InvariantResult[];
+  perturbation?: PerturbationRecord;
+  escalation?: EscalationRecord;
   screenshots: string[];
   consoleErrors?: string[];
   durationMs?: number;
@@ -99,6 +126,13 @@ export interface BuildReportArgs {
    * path). Capped at 3 by the caller per the report.schema range.
    */
   fixCycles?: number;
+  // ── VERIFY-2 gate blocks (optional; present on a six-gate run) ─────────────
+  fidelity?: FidelityResult[];
+  completability?: CompletabilityResult;
+  invariants?: InvariantResult[];
+  perturbation?: PerturbationRecord;
+  escalation?: EscalationRecord;
+  regression?: { priorMilestonesChecked?: string[]; broke?: string[] };
 }
 
 /**
@@ -130,6 +164,13 @@ export function buildReport(args: BuildReportArgs): VerifyReport {
     fixCycles,
     fixOutcome,
     advisoryVlm: args.advisoryVlm,
+    // VERIFY-2 gate blocks — only emitted when the six-gate run supplied them.
+    ...(args.fidelity ? { fidelity: args.fidelity } : {}),
+    ...(args.completability ? { completability: args.completability } : {}),
+    ...(args.invariants ? { invariants: args.invariants } : {}),
+    ...(args.perturbation ? { perturbation: args.perturbation } : {}),
+    ...(args.escalation ? { escalation: args.escalation } : {}),
+    ...(args.regression ? { regression: args.regression } : {}),
     screenshots: args.screenshots,
     ...(args.consoleErrors.length > 0 ? { consoleErrors: args.consoleErrors } : {}),
     durationMs: args.durationMs,
@@ -138,13 +179,19 @@ export function buildReport(args: BuildReportArgs): VerifyReport {
 }
 
 /**
- * Write the report to <projectDir>/verify/report.json. Returns the absolute
- * path written.
+ * Write the report PER-MILESTONE to <projectDir>/verify/report.M<id>.json
+ * (NEVER overwritten — the old node clobbered a single verify/report.json, which
+ * lost the M1/M2 proof when M3 ran; SKILL §9). Returns the absolute path written.
+ * A non-`M<n>` milestoneId (a boot/usage edge) falls back to `report.json` so an
+ * older project still gets a file.
  */
 export function writeReport(projectDir: string, report: VerifyReport): string {
   const verifyDir = join(projectDir, 'verify');
   mkdirSync(verifyDir, { recursive: true });
-  const path = join(verifyDir, 'report.json');
+  const fileName = /^M[1-9][0-9]*$/.test(report.milestoneId)
+    ? `report.${report.milestoneId}.json`
+    : 'report.json';
+  const path = join(verifyDir, fileName);
   writeFileSync(path, JSON.stringify(report, null, 2) + '\n', 'utf8');
   return path;
 }

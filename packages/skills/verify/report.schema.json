@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://game-omni/verify/report.schema.json",
-  "title": "W5 Verify report artifact (verify/report.json)",
-  "description": "The proof-of-work the W5 Verify+Fix node writes for ONE milestone. Written by packages/skills/verify/SKILL.md after booting the built game headless, executing the milestone's assertions against window.__GAME__, running the bounded <=3 self-fix on failure, and emitting the VALIDATION_PASSED/FAILED marker. Read by the orchestrator (the binary marker is the gate) and by a human (per-assertion observed-vs-expected, screenshots, fix trail). One report.json per milestone-verify; the workflow may keep a per-milestone file (verify/report.M2.json) or overwrite verify/report.json per stage. Evidence: research/skills/w5-verify-research.md synthesis #10.",
+  "title": "VERIFY-2 impl/QA report artifact (verify/report.M<id>.json)",
+  "description": "The proof-of-work the VERIFY-2 Verify+Fix (impl/QA) node writes PER MILESTONE. Written by packages/skills/verify/SKILL.md after booting the built game headless, proving the build is a FAITHFUL realization of VERIFY-1's frozen blueprint: build-health, USER-FLOW FIDELITY (the blueprint mechanisms as Given/When/Then), COMPLETABILITY (replay the reference intended solution), trace-level INVARIANTS, and ISOMORPHIC PERTURBATION (re-run the acceptance criteria with the blueprint's declared-range parameters permuted), then running the bounded <=3 self-fix on failure and emitting the VALIDATION_PASSED/FAILED marker. Read by the orchestrator (the binary marker is the gate) and by a human (per-check observed-vs-expected, the perturbation divergences, screenshots, fix trail). INTENTIONAL CHANGE vs the original W5 shape: written PER MILESTONE (verify/report.M2.json), NEVER overwritten, so the full run's evidence persists (the old node wrote/overwrote a single verify/report.json — SKILL §9). ADDITIVE schema extension: the original assertions[]/buildHealth/fixCycles/advisoryVlm/regression/screenshots fields are retained (an old verify/report.json still validates); the VERIFY-2 gate fields (fidelity/completability/invariants/perturbation/escalation) are OPTIONAL additions. Evidence: research/skills/w5-verify-research.md synthesis #10; SKILL §6 + §9 + perturbation-grammar.md.",
   "type": "object",
   "additionalProperties": false,
   "required": ["milestoneId", "marker", "passed", "summary", "assertions", "buildHealth", "fixCycles", "advisoryVlm", "screenshots", "startedAt"],
@@ -98,16 +98,128 @@
     "regression": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Pass-to-pass guard: because milestones build cumulatively, after a self-fix W5 re-checks that prior milestones' assertions still pass (SWE-bench PASS_TO_PASS; MobileGym unexpected-side-effects). Omitted if no fix edited src/**.",
+      "description": "Pass-to-pass guard: because milestones build cumulatively, after a self-fix VERIFY-2 re-checks that prior milestones' fidelity checks still pass (SWE-bench PASS_TO_PASS; MobileGym unexpected-side-effects). Omitted if no fix edited src/**. SKILL §9 regression guard.",
       "properties": {
-        "priorMilestonesChecked": { "type": "array", "items": { "type": "string", "pattern": "^M[1-9][0-9]*$" }, "description": "Prior milestone ids whose assertions were re-run after the fix." },
-        "broke": { "type": "array", "items": { "type": "string" }, "description": "Prior assertion ids that NOW fail after this milestone's fix (a regression the fix introduced). Empty = no regression. A non-empty list is a real problem recorded for the orchestrator/human." }
+        "priorMilestonesChecked": { "type": "array", "items": { "type": "string", "pattern": "^M[1-9][0-9]*$" }, "description": "Prior milestone ids whose fidelity checks were re-run after the fix." },
+        "broke": { "type": "array", "items": { "type": "string" }, "description": "Prior check ids that NOW fail after this milestone's fix (a regression the fix introduced). Empty = no regression. A non-empty list is a real problem recorded for the orchestrator/human." }
+      }
+    },
+    "fidelity": {
+      "type": "array",
+      "description": "VERIFY-2 §3 USER-FLOW FIDELITY: each blueprint mechanism as Given/When/Then, driven from a KNOWN precondition VERIFY-2 placed. 1:1 with blueprint.acceptanceCriteria (the canonical fidelity contract; the gdd assertions[] are the executable fallback). EVERY mechanism runs (single-aggregate, not fail-fast). Any 'fail'/'error' here forces marker=FAILED. OPTIONAL (the original assertions[] block remains valid); a VERIFY-2 report carries fidelity[] instead of/alongside assertions[].",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "describe", "observe", "comparator", "expected", "observed", "status"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^(AC-)?M[1-9][0-9]*([-_].*)?$", "description": "The acceptance-criterion / gdd assertion id (e.g. 'M2-A1' or 'AC-M3-win')." },
+          "describe": { "type": "string", "minLength": 1, "description": "The mechanism's human-readable predicate = its failure message." },
+          "given": { "type": "string", "description": "The precondition VERIFY-2 placed (the frozen GIVEN from blueprint.acceptanceCriteria). MUST be a legal precondition per perturbation-grammar.md §6 (D2): not the observed field, not a one-step causal input the mechanism reads to produce the outcome." },
+          "observe": { "type": "string", "minLength": 1, "description": "The observe expression evaluated against __GAME__ (e.g. 'player.y', 'score', 'status', 'entities.count(type==enemy)')." },
+          "comparator": { "type": "string", "enum": ["decreases", "increases", "changes", "unchanged", "equals", "atLeast", "atMost"], "description": "The single 'expect' comparator key that was set." },
+          "expected": { "description": "The comparator's expected value/direction (boolean direction for relative comparators; number|string|boolean for equals/atLeast/atMost)." },
+          "observed": { "description": "What VERIFY-2 read off __GAME__ after firing the input. For relative comparators, an object {before, after}. null if the observe path was missing/undefined." },
+          "status": { "type": "string", "enum": ["pass", "fail", "error"], "description": "'pass' = comparator satisfied; 'fail' = not satisfied on a clean read; 'error' = observe path missing / input couldn't fire / read threw (treated as fail for the marker, recorded distinctly)." },
+          "message": { "type": "string", "description": "On fail/error: the diagnostic. Omitted on pass." },
+          "screenshot": { "type": "string", "description": "Optional path to a screenshot captured at this check's end state (relative to the project dir)." }
+        }
+      }
+    },
+    "completability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ran", "reachedWin", "status"],
+      "description": "VERIFY-2 §4 COMPLETABILITY: replay blueprint.referenceSolution (the proven winning action-sequence) step-by-step and assert it reaches the win THROUGH REAL PLAY (interim observables hold, never via setState injection). Proves the build realizes the proven-winnable design. OPTIONAL (present on a VERIFY-2 report).",
+      "properties": {
+        "ran": { "type": "boolean", "description": "Was the intended-solution replay run?" },
+        "intendedSolutionId": { "type": "string", "description": "Identifier of the blueprint.referenceSolution replayed (provenance)." },
+        "reachedWin": { "type": "boolean", "description": "Did the replay reach the win observable (status==='won' + the archetype's completion invariants) through the real action-sequence?" },
+        "interimObservables": { "type": "array", "description": "Per-step interim observable checks along the replay (e.g. 'score reached 3 through real collection'), proving the win came via the genuine flow, not an injected shortcut.", "items": { "type": "object", "additionalProperties": true } },
+        "status": { "type": "string", "enum": ["pass", "fail", "error"], "description": "'pass' = win reached through real play; 'fail' = a step mis-implements (door doesn't latch, coin doesn't increment, RESPAWN wrong) -> IMPLEMENTATION FAILURE (fixable §7); 'error' = replay could not run (verdict-correctness §11). A blueprint solution that no longer holds even when built faithfully is a DESIGN ESCALATION (§8), recorded in escalation, not a fail here." },
+        "message": { "type": "string", "description": "On fail/error: the diagnostic (which step, observed-vs-expected)." }
+      }
+    },
+    "invariants": {
+      "type": "array",
+      "description": "VERIFY-2 §5 trace-level + differential pre/post-conditions, sampled on a bounded cadence across every drive (§3) and the replay (§4) — relations an end-state check misses (score-monotone, in-bounds, no soft-lock, status-legality, no unexpected side-effect). A violation is a real bug -> FAILED. OPTIONAL (present on a VERIFY-2 report).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "kind", "held"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "description": "Human name of the invariant (e.g. 'score never decreases within a life')." },
+          "kind": { "type": "string", "enum": ["monotonic", "bounds", "no-softlock", "status-legality", "no-side-effect"], "description": "The invariant class (SKILL §5)." },
+          "held": { "type": "boolean", "description": "Did the invariant hold across the whole trace? false = a real bug forcing FAILED." },
+          "evidence": { "type": "string", "description": "On a violation: the trace evidence (e.g. 'player frozen at x=308 for ~900 frames under continuous input' or 'status flipped to lost on contact in a respawn-only design')." }
+        }
+      }
+    },
+    "perturbation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ran", "invariant"],
+      "description": "VERIFY-2 §6 ISOMORPHIC PERTURBATION (the load-bearing anti-gaming gate): a second bounded boot that re-runs the acceptance criteria + completability with blueprint.declaredRanges parameters PERMUTED within their declared bands. A faithful build is INVARIANT; a contorted/hard-coded/over-fit build DIVERGES. invariant===false forces marker=FAILED. Applied via commands.{reset,seed,setState} / config-injection ONLY, NEVER by editing src/** or any oracle, NEVER widening a declared range. Contract: perturbation-grammar.md. OPTIONAL on the schema, but NON-OPTIONAL on a VERIFY-2 run (a verify without the permutation pass is INCOMPLETE, SKILL §11).",
+      "properties": {
+        "ran": { "type": "boolean", "description": "Was the permuted re-run executed? false only on a missing/empty blueprint.declaredRanges (a VERIFY-1 contract gap -> design escalation, NOT a build pass)." },
+        "permutationSeed": { "type": "integer", "description": "The deterministic selector seed (seed/index-based, reproducible — NEVER raw Math.random()). A re-verify reproduces the exact permuted run. perturbation-grammar.md §2." },
+        "permutationsApplied": {
+          "type": "array",
+          "description": "One entry per parameterPath actually moved (point-ranges that couldn't move are omitted).",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["parameterPath", "original", "permuted", "seam"],
+            "properties": {
+              "parameterPath": { "type": "string", "minLength": 1, "description": "The flat declaredRanges key permuted (e.g. 'config.enemyWalkSpeed', 'layout.rewards.coin_1.x', 'rng.seed'). The engine enumerates declaredRanges as parameterPath -> [min,max]." },
+              "original": { "description": "The frozen blueprint value for this parameterPath." },
+              "permuted": { "description": "The in-envelope permuted value drawn from [min,max] (strictly inside the declared range; never widened)." },
+              "seam": { "type": "string", "enum": ["runtime", "baked-config"], "description": "Where the permutation was applied (D1): 'runtime' = commands.setState/seed/injected level-config (positions, seed, counts, precondition placement, patrol phase); 'baked-config' = permuted gameConfig.json + EXACTLY ONE rebuild (a tunable read once in create(), e.g. enemyWalkSpeed)." }
+            }
+          }
+        },
+        "invariant": { "type": "boolean", "description": "true = every originally-passing acceptance criterion + the completability replay still pass under the permutation (faithful build). false = at least one passed originally but FAILS in-envelope (contorted build) -> forces marker=FAILED. A permutation that broke the design is a HARNESS bug (§11 self-guard), corrected and re-run, NOT recorded as a divergence." },
+        "diverged": {
+          "type": "array",
+          "description": "Empty when invariant===true. Each entry localizes a contortion for the fix step.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["checkId", "permutation", "originalObserved", "permutedObserved"],
+            "properties": {
+              "checkId": { "type": "string", "minLength": 1, "description": "The acceptance criterion / completability id that diverged (passed originally, failed under permutation)." },
+              "permutation": { "type": "string", "minLength": 1, "description": "The permutation class + the specific move that exposed the contortion (e.g. 'approach-distance (precondition re-placed +18px within [380,460])', 'count 3->5', 'coord-shift', 'seed 1->777', 'enemyWalkSpeed 80->90')." },
+              "originalObserved": { "description": "What __GAME__ read under the ORIGINAL parameters (the passing value)." },
+              "permutedObserved": { "description": "What __GAME__ read under the PERMUTED parameters (the failing value) — the evidence the build over-fit the exact numbers." }
+            }
+          }
+        }
+      }
+    },
+    "escalation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["milestoneId", "kind", "note"],
+      "description": "VERIFY-2 §8 DESIGN ESCALATION: present IFF a genuine DESIGN problem (the frozen blueprint itself is wrong — a step unwinnable even when built faithfully, a contradiction VERIFY-1 missed) was flagged and routed UPSTREAM (to VERIFY-1 / the design node), NEVER 'fixed' by bending the build. Mirrors blueprint/escalations.M<id>.json. Present only on a design escalation, never a substitute for fixing a real implementation bug.",
+      "properties": {
+        "milestoneId": { "type": "string", "pattern": "^M[1-9][0-9]*$", "description": "The milestone whose blueprint is being escalated." },
+        "kind": { "type": "string", "enum": ["design-defect"], "description": "The escalation class. VERIFY-2 only escalates design defects (implementation bugs are fixed in §7, not escalated)." },
+        "evidence": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "The evidence the blueprint is at fault: which check, what was observed, what the blueprint expected.",
+          "properties": {
+            "check": { "type": "string" },
+            "observed": {},
+            "blueprintExpected": {}
+          }
+        },
+        "note": { "type": "string", "minLength": 1, "description": "One-line statement of the design defect routed upstream." }
       }
     },
     "screenshots": {
       "type": "array",
       "items": { "type": "string" },
-      "description": "Paths (relative to the project dir) of screenshots captured: at least one at the milestone's end state, plus one per failure. Used by a human and by the advisory VLM."
+      "description": "Paths (relative to the project dir) of screenshots captured: at least one at the milestone's end state, one per failure, and the permuted-run end state. Used by a human and by the advisory VLM."
     },
     "consoleErrors": {
       "type": "array",
