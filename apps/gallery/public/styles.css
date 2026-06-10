@@ -137,9 +137,11 @@ code { font-family: var(--mono); font-size: .88em; color: var(--vermilion);
 .pipeline .seg { display: grid; justify-items: center; gap: 5px; }
 .pipeline .mk { width: 10px; height: 10px; border: 1.4px solid var(--ink-3); transform: rotate(45deg); }
 .pipeline .mk.done { background: var(--ink); border-color: var(--ink); }
-.pipeline .seg.live .mk.done { background: var(--vermilion); border-color: var(--vermilion); }
+.pipeline .mk.done.live { background: var(--vermilion); border-color: var(--vermilion); }
+.pipeline .mk.err { background: var(--oxblood); border-color: var(--oxblood);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--oxblood) 16%, transparent); }
 .pipeline small { font-family: var(--mono); font-size: 8.5px; letter-spacing: .06em; color: var(--ink-3); }
-.pipeline .seg .mk.done + small { color: var(--ink-2); }
+.pipeline .seg .mk.done + small, .pipeline .seg .mk.err + small { color: var(--ink-2); }
 
 /* the mount: a dark plate set into paper with a real cast shadow */
 .mount { position: relative; aspect-ratio: 16 / 10; background: var(--specimen);
@@ -170,6 +172,15 @@ code { font-family: var(--mono); font-size: .88em; color: var(--vermilion);
   border: 1px solid rgba(216,207,189,.3); background: rgba(12,13,15,.55); backdrop-filter: blur(4px);
   transition: color .15s, border-color .15s; }
 .tool:hover { color: var(--paper); border-color: var(--vermilion); }
+.tool.primary { color: var(--paper); border-color: var(--vermilion);
+  background: color-mix(in srgb, var(--vermilion) 76%, #000); }
+.tool.primary:hover { background: var(--vermilion); }
+.playhint { position: absolute; left: 16px; bottom: 14px; z-index: 6; pointer-events: none;
+  font-family: var(--mono); font-size: 10px; letter-spacing: .07em; color: #bbb2a2;
+  background: rgba(12,13,15,.5); border: 1px solid rgba(216,207,189,.18); padding: 4px 9px;
+  backdrop-filter: blur(4px); transition: opacity .4s; }
+.playhint b { color: var(--paper); font-weight: 600; }
+.mount:focus-within .playhint { opacity: 0; }
 
 /* letterpress caption under the plate */
 .caption { display: flex; align-items: baseline; justify-content: space-between; gap: 20px;
@@ -181,6 +192,33 @@ code { font-family: var(--mono); font-size: .88em; color: var(--vermilion);
 .caption .loop { font-family: var(--serif); font-size: 18px; line-height: 1.5; max-width: 40ch;
   color: var(--ink); border-left: 2px solid var(--vermilion); padding-left: 14px; }
 .caption .loop .verb { color: var(--vermilion); font-style: italic; }
+.runline { text-align: right; flex-shrink: 0; }
+.runline .verdict { font-family: var(--mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase;
+  padding: 3px 8px; border: 1px solid; border-radius: 3px; }
+.runline .verdict.ok { color: var(--verd); border-color: color-mix(in srgb, var(--verd) 45%, transparent); }
+.runline .verdict.no { color: var(--oxblood); border-color: color-mix(in srgb, var(--oxblood) 45%, transparent); }
+.runline .rmeta { display: block; font-family: var(--mono); font-size: 11px; color: var(--ink-2);
+  margin-top: 7px; letter-spacing: .03em; }
+
+/* run record — node timeline + execution totals */
+.panel.run { background: linear-gradient(180deg, color-mix(in srgb, var(--ink) 3%, transparent), transparent 60%); }
+.runbox { display: grid; gap: 11px; }
+.rbar { display: flex; height: 15px; gap: 2px; }
+.rseg { display: block; min-width: 3px; border-radius: 1px; cursor: help; }
+.rseg.ok { background: var(--ink-2); } .rseg.err { background: var(--oxblood); }
+.rseg:hover { outline: 1.5px solid var(--ink); outline-offset: 1px; }
+.raxis { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 9.5px;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
+.runfail { font-family: var(--mono); font-size: 12.5px; color: var(--oxblood); letter-spacing: .01em; }
+.runfail b { font-weight: 600; }
+.runok { font-family: var(--mono); font-size: 12.5px; color: var(--verd); letter-spacing: .01em; }
+.rtotals { display: flex; flex-wrap: wrap; gap: 12px 30px; border-top: 1px solid var(--rule);
+  padding-top: 14px; }
+.rtotals .t { display: flex; flex-direction: column; font-family: var(--mono); font-size: 9.5px;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
+.rtotals .t b { font-family: var(--display); font-weight: 440; font-size: 23px; letter-spacing: -.015em;
+  text-transform: none; color: var(--ink); margin-bottom: 2px; }
+.rtotals .t.ok b { color: var(--verd); } .rtotals .t.no b { color: var(--oxblood); }
 
 /* ── the record (catalogue entry: ledger panels = the bento) ────────── */
 .record { display: grid; grid-template-columns: repeat(12, 1fr); gap: 0;

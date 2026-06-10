@@ -23,15 +23,18 @@ Any directory (depth ≤ 3 under `GAMES_DIR`, default `../../out`) that contains
 | `spec/gdd.json` | title · controls · win/lose · milestones · entities/mechanics/assets counts |
 | `index.json` | asset readiness + poster sprite |
 | `verify/report*.json` | VALIDATION_PASSED/FAILED · assertions passed · fix cycles _(W5)_ |
-| artifact presence | the W0→W5 pipeline status dots |
-| `dist/index.html` | the **playable** build shown in the cabinet (else a poster) |
+| `run-status.json` | **run verdict · node timeline · wall-clock · cost · tokens · where it halted** — and (when present) drives the W0→W5 pipeline + per-milestone verify marks |
+| `dist/index.html` | the **playable** build, shown live in the cabinet (▸ fullscreen / open in tab); else a poster |
+
+When `run-status.json` exists it is the authority for pipeline status; otherwise the
+gallery falls back to artifact presence. Every game folder is read the same way, so
+future runs (`plat2`, `plat3`, …) appear automatically with no changes here.
 
 It **invents no data model** — it only projects keys the pipeline already commits.
 Known-but-unsure-of-shape signals (Hermes per-skill improvement deltas, the design
-doc) are **commented out** in `public/app.js` (`verifyCard`) ready to wire once W5 /
-Hermes land.
+doc) are **commented out** in `public/app.js` (`verif()`) ready to wire once they land.
 
-## Samples
-`out/games/coin-dash/` (fully playable, verified) and `out/games/orbit-dodger/`
-(pre-build, poster mode) are **sample fixtures** so the UI is non-empty. Delete them
-once real games land.
+## Playing
+The featured game runs inline in the cabinet. Because some games bind **Space**
+(which scrolls the page when embedded), click **⤢ fullscreen** (or **open ↗** for a
+dedicated tab) before pressing Space/Enter — in fullscreen the game owns the keyboard.

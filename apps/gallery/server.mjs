@@ -79,23 +79,38 @@ async function readGame(dir) {
     }
   }
 
+  // run-status.json (the runner's canonical execution record) — the authoritative
+  // per-node truth. When present it DRIVES the pipeline; else we fall back to artifacts.
+  const rs = await readJSON(path.join(dir, 'run-status.json'))
+  const run = summarizeRun(rs)
+
   // prefer gdd values, fall back to classification — never show the same fact twice.
   const meta = (gdd && gdd.meta) || {}
   const title = meta.title || rel.split(path.sep).pop()
   const archetype = meta.archetype || cls?.archetype || 'unknown'
 
-  // pipeline / sync status, derived purely from artifact presence on disk.
+  // pipeline / sync status: from run-status when it exists, else artifact presence.
   const slots = index?.slots || []
   const generated = slots.filter((s) => s.status === 'generated' || s.status === 'placeholder').length
   const distReady = exists(path.join(dir, 'dist', 'index.html'))
+  const pstat = (w, artifactDone) => run
+    ? { done: run.phaseStatus[w] === 'ok', status: run.phaseStatus[w] || 'pending' }
+    : { done: artifactDone, status: artifactDone ? 'ok' : 'pending' }
   const pipeline = [
-    { id: 'W0', label: 'Classify', done: !!cls },
-    { id: 'W1', label: 'Spec',     done: !!gdd },
-    { id: 'W2', label: 'Scaffold', done: !!index || exists(path.join(dir, 'STRUCTURE.md')) },
-    { id: 'W3', label: 'Assets',   done: exists(path.join(dir, 'ASSETS.md')) || (slots.length > 0 && generated === slots.length) },
-    { id: 'W4', label: 'Implement', done: distReady },
-    { id: 'W5', label: 'Verify',   done: reports.length > 0 },
+    { id: 'W0', label: 'Classify',  ...pstat('W0', !!cls) },
+    { id: 'W1', label: 'Spec',      ...pstat('W1', !!gdd) },
+    { id: 'W2', label: 'Scaffold',  ...pstat('W2', !!index || exists(path.join(dir, 'STRUCTURE.md'))) },
+    { id: 'W3', label: 'Assets',    ...pstat('W3', exists(path.join(dir, 'ASSETS.md')) || (slots.length > 0 && generated === slots.length)) },
+    { id: 'W4', label: 'Implement', ...pstat('W4', distReady) },
+    { id: 'W5', label: 'Verify',    ...pstat('W5', reports.length > 0) },
   ]
+
+  // per-milestone verify badge: prefer the run-status W5 node, else a report.json.
+  const mileVerify = (mid) => {
+    const node = rs?.nodes?.[`w5-verify-m${mid.replace(/^M/i, '')}`]
+    if (node) return { passed: node.status === 'ok', source: 'run' }
+    return verify.byMilestone[mid] || null
+  }
 
   // poster: first sprite from the slot manifest, else first image under public/assets.
   let poster = null
@@ -130,12 +145,45 @@ async function readGame(dir) {
     milestones: (gdd?.milestones || []).map((m) => ({
       id: m.id, name: m.name, goal: m.goal,
       assertions: (m.assertions || []).length,
-      verify: verify.byMilestone[m.id] || null,
+      verify: mileVerify(m.id),
     })),
     assets: { total: slots.length, ready: generated },
     verify,                  // { ran, milestones, passed, totalAssertions, passedAssertions, fixCycles }
+    run,                     // the run-status roll-up (null if no run-status.json)
     pipeline, poster,
     playable: distReady,
+  }
+}
+
+// ---- run-status.json roll-up: the few execution facts worth showing -----------
+function summarizeRun(rs) {
+  if (!rs || !rs.nodes) return null
+  const nodes = Object.values(rs.nodes)
+  let cost = 0, billable = 0, peak = 0
+  const list = nodes.map((n) => {
+    const t = n.tokens || {}
+    cost += t.cost || 0; billable += t.billable || 0; peak = Math.max(peak, t.contextPeak || 0)
+    let reason = ''
+    if (n.status !== 'ok') {
+      if (n.killedTimeout) reason = `timed out (${Math.round((n.durationMs || 0) / 60000)}m)`
+      else if (n.exitCode) reason = `exit ${n.exitCode}`
+      else reason = (n.issues && n.issues[0]) || n.status
+    }
+    return { id: n.id, label: n.label, phase: n.phase, status: n.status, durationMs: n.durationMs || 0, reason }
+  })
+  // aggregate node status up to the six pipeline phases (any error => phase errored)
+  const PHASE_W = { 'W0 Classify': 'W0', 'W1 Spec': 'W1', 'W2 Scaffold': 'W2', 'W3 Assets': 'W3', 'W4 Implement': 'W4', 'W5 Verify+Fix': 'W5' }
+  const phaseStatus = {}
+  for (const n of nodes) {
+    const w = PHASE_W[n.phase]; if (!w) continue
+    if (n.status !== 'ok') phaseStatus[w] = 'error'
+    else if (phaseStatus[w] !== 'error') phaseStatus[w] = 'ok'
+  }
+  return {
+    ok: !!rs.ok, done: !!rs.done, provider: rs.provider || null, model: rs.model || null,
+    durationMs: rs.durationMs || rs.elapsedMs || 0, startedAt: rs.startedAt || null,
+    cost, billable, peak, nodeCount: nodes.length,
+    nodes: list, failed: list.find((n) => n.status !== 'ok') || null, phaseStatus,
   }
 }
 
