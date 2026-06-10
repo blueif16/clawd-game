@@ -50,9 +50,19 @@ export class Preloader extends Phaser.Scene {
     const slots = manifest.slots ?? [];
 
     for (const s of slots) {
-      // Only attempt to load files W3 says are ready. Everything else is
-      // placeholder-filled in create() — never block boot on a missing file.
-      if (s.status !== 'generated' || !s.path) continue;
+      // Load the real on-disk file for ANY slot W3 actually produced — final
+      // art (status 'generated') OR a legible greybox PNG (status 'placeholder'
+      // WITH a path). Both are real files on disk; show them. A non-empty
+      // `path` is the W3↔template contract for "a real file exists — load it".
+      // Only slots with no file (pending / no path) fall through to the
+      // programmatic colored-rect fill in create() (a load error re-fills via
+      // FILE_LOAD_ERROR; once a real texture loads, ensurePlaceholderTexture's
+      // textures.exists guard makes the create() fill a no-op). Skipping
+      // 'placeholder' files here is what made every entity render as one
+      // type-uniform square — W3's per-role colors were written to disk but
+      // never loaded.
+      if (!s.path || (s.status !== 'generated' && s.status !== 'placeholder'))
+        continue;
       const url = `${assetsDir}/${s.path}`.replace(/\/+/g, '/');
       try {
         if (s.type === 'audio') {
