@@ -1,6 +1,6 @@
 # game-omni — STATUS
 
-_Updated 2026-06-08. Single entry point per session. **Read order:** this → `design/pipeline-design-v1.md` (the plan) → `research/` (the why). Keep this LEAN: research lives in `research/`, the plan lives in `design/`._
+_Updated 2026-06-09. Single entry point per session. **Read order:** this → `design/pipeline-design-v1.md` (the plan) → `research/` (the why). Keep this LEAN: research lives in `research/`, the plan lives in `design/`._
 
 ---
 
@@ -59,10 +59,10 @@ An **AI game-generation engine** — a pipeline that turns a prompt into a worki
 ## Current state
 **BUILT + PROVEN:** the W0–W5 skill system (`packages/skills/*`, each with a research record in `research/skills/`); the orchestrator **`.claude/workflows/game-omni.js`** (Pi-extractable: 10 stages); the **platformer template** (`templates/core/` + `templates/modules/platformer/` — builds green, boots headless to `window.__GAME__.ready`, hook proven live); and the **verify harness** (`packages/verify/` — proven PASS + FAIL against the template). Governance: `.agents/skill-system-map.md`, `CLAUDE.md`, `README.md`.
 
-**RUNNING:** first end-to-end **pi** run (`node pi-runner/run.mjs --run plat1 …`) on a platformer prompt — status at `out/plat1/run-status.json`, the game lands in `out/game/`. (W0 already verified on pi: wrote a valid `spec/classification.json`.)
+**PROVEN ON PI (2026-06-09):** the full pipeline runs robust end-to-end on a cheap non-Claude model. Run `td1` (`MiniMax-M3`, main-tree, top_down robot-collect-batteries prompt) completed **all 10 nodes in 95.2m**, and **all 3 milestones reached `VALIDATION_PASSED` on the first try (fixCycles=0)** over real `window.__GAME__` assertions → `out/td1/verify/report.json` + `verify/M{1,2,3}-end.png`. Two prerequisites were settled to get here: the MODEL (`cp`/qwen `reasoning:false` derailed the heavy nodes → `MiniMax-M3` `reasoning:true`/1M-ctx terminates cleanly), and two ENGINE false-blocks in the OUTPUT-CONTRACT layer (G2 + G3, synced byte-identical to canonical `transform-workflow-to-pi`). After G2+G3 every remaining `blocked`/`error` is a genuine failure. _(Full write-up: `.agents/skill-system-map.md` diagnostics log.)_
 
 **NEXT:**
-1. Build the other 4 genre templates (top_down / grid_logic / tower_defense / ui_heavy), reusing `templates/core/` unchanged → hand-off prompt **`docs/handoff-build-archetype-templates.md`**.
-2. Watch the pi run; route any real flaw it surfaces via `hermes-skill-system` (a wave → its SKILL; the chain → `game-omni.js`).
+1. Build the other 4 genre templates (top_down / grid_logic / tower_defense / ui_heavy), reusing `templates/core/` unchanged → hand-off prompt **`docs/handoff-build-archetype-templates.md`**. _(td1 exercised `top_down` via the archetype overlay — confirm the dedicated template path next.)_
+2. Human is the eye: inspect the `out/td1/` artifact + screenshots for play-feel quality; route any real flaw via `hermes-skill-system` (a wave → its SKILL; the chain → `game-omni.js`).
 
 _Evolve any node via `hermes-skill-system`. The human is the eye for the playable game._

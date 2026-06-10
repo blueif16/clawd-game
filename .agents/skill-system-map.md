@@ -203,6 +203,30 @@ session can retrace the evidence behind any edit. A claim with no doc on disk is
   booting Chromium (cost-capped; refusal idempotent), resets on pass. Anti-reward-hack: honest FAILED at the
   bound, oracle untouched. Kept OUT of the canonical `run.mjs` (byte-identical preserved). typecheck green.
   (commit: `7dcb1d0` · skillsys(verify); doc: `docs/handoff-fix-pipeline-findings.md` §A2.)
+- 2026-06-09 — `pi-runner/run.mjs` (engine, synced BYTE-IDENTICAL to canonical) + provider/model choice —
+  **The Pi loop is now PROVEN robust end-to-end on `MiniMax-M3`** (first fully-green full run). Two distinct
+  problems were separated and fixed: **(1) MODEL fidelity** — `cp` (qwen3.x-max, `reasoning:false`) derailed
+  on the heavy nodes (W1 ran to ~1.88M tokens, emitted invalid JSON, never terminated); swapping to
+  **MiniMax-M3** (`reasoning:true`, 1M ctx) makes W0–W5 produce valid output and terminate cleanly (W1
+  reasoning is variable 4–15m but always converges; W4-M2 peaked ~22m of pure reasoning yet stayed well
+  inside the 1800s node-timeout). **(2) ENGINE false-blocks** — two genuine bugs in the OUTPUT-CONTRACT layer
+  were halting real-but-correct nodes: **G3** the forgiving artifact resolver is now `projectDir`-aware
+  (PROJECT_BASE) so a project-relative self-report no longer false-blocks W4 (`268d4c7` local / canonical
+  `ecaa823`); **G2** a satisfied `DRIVER-ARTIFACTS` contract now OVERRIDES a noisy self-report (empty
+  `.gitkeep`, stripped paths) so W2 is no longer false-blocked (`84857e1` local / canonical `04ccc82`).
+  Engine kept byte-identical with the canonical `transform-workflow-to-pi` template (no per-repo divergence).
+  **Analytic guarantee after G2+G3:** every remaining `blocked`/`error` path is now a GENUINE failure.
+  **Proof — the real run, never assumed:** `out/td1` (top_down robot-collect-batteries prompt) completed all
+  **10 nodes in 95.2m**, and **all 3 milestones reached `VALIDATION_PASSED` on the FIRST try (fixCycles=0)**
+  over genuine `window.__GAME__` assertions — M1 move/steer 3/3 (player count; x↑ on Right; y↓ on Up), M2
+  collect/avoid 3/3 (battery→score 0→1; collectible 2→1; guard→status='lost'), M3 win/restart 2/2
+  (reach-exit→'won'; R→'playing'). The only per-node note across the whole run is the benign `contract warn`
+  (projectDir-relative OWNED-path self-reports — logged, overridden by the satisfied contract, never blocks;
+  a future cosmetic edit could teach the warn to recognize owned project-relative paths). `--worktree` is NOT
+  used by game-omni (single-pass-per-`out/<id>`; Output Contract + gitignored per-run dir already isolate —
+  recorded canonical `reference/worktree-isolation.md` `89b6d9c`; two unrelated worktree bugs fixed upstream
+  anyway: `dcae3a0`, `0ce8303`). (commit: skillsys(pi-runner); doc: `out/td1/verify/report.json` +
+  per-milestone `verify/M{1,2,3}-end.png`.)
 - _(future flaws/fixes append here so repeat-flaws become visible and the next diagnosis starts ahead.)_
 
 ## Stewardship note
