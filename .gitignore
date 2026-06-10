@@ -15,10 +15,26 @@ out-game/
 # gitlinks). Read-only provenance for the skills — kept on disk, not tracked.
 reference-repos/
 
-# ── secrets / local env ─────────────────────────────────────────────────────
+# ── secrets / local env (never commit a real key) ───────────────────────────
 .env
-.env.local
+.env.*
+!.env.example          # the only env file that may be tracked (wiring template, no creds)
 *.local
+*.pem
+*.key
+*.p12
+*_rsa
+*.credentials
+secrets.json
+
+# ── Claude Code local/conversation artifacts ─────────────────────────────────
+# Session transcripts, todos, and local settings the harness writes per machine.
+# Keep ONLY the canonical workflow source (.claude/workflows/) — the project's
+# single source of truth — tracked; ignore everything else under .claude/.
+.claude/*
+!.claude/workflows/
+.claude.json
+.claude.json.backup
 
 # ── OS / editor cruft ───────────────────────────────────────────────────────
 .DS_Store
