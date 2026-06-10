@@ -227,6 +227,39 @@ session can retrace the evidence behind any edit. A claim with no doc on disk is
   recorded canonical `reference/worktree-isolation.md` `89b6d9c`; two unrelated worktree bugs fixed upstream
   anyway: `dcae3a0`, `0ce8303`). (commit: skillsys(pi-runner); doc: `out/td1/verify/report.json` +
   per-milestone `verify/M{1,2,3}-end.png`.)
+- 2026-06-10 — `templates/core/scenes/Preloader.ts` + `scaffold/template-contract.md` — **The Preloader
+  silently discarded W3's placeholder art → every entity rendered as ONE type-uniform square.** Trigger:
+  human played `out/td1` and flagged "everything looks the same; no color to tell the enemy apart." W3 wrote
+  CORRECT role-distinct PNGs to disk (player blue `#4A6FFF`, guard red `#E94B4B`, battery green `#4BFF7A`),
+  but `Preloader.preload()` loaded a slot's file ONLY when `status==='generated'`; W3's placeholder-mode files
+  carry `status:'placeholder'`, so the loader SKIPPED all of them and `create()` filled each slot via
+  `ensurePlaceholderTexture`'s TYPE-keyed flat color (every sprite/animation = `0x4a90d9`). The on-disk art was
+  never shown. Root = a contract conflation: `status` (final-vs-greybox) and `path` (file-vs-no-file) are
+  ORTHOGONAL; the gate treated `placeholder` as "no file." **Fix:** load the on-disk file whenever a slot has a
+  `path` (status `generated` OR `placeholder`); programmatic-fill ONLY file-less slots (`pending`/no-path/load-
+  error) — and `ensurePlaceholderTexture`'s `textures.exists` guard already makes the `create()` fill a no-op
+  once the real texture loads, so the one-line gate change is the whole fix. Generalizes to EVERY archetype (all
+  overlay `templates/core`) and EVERY placeholder-mode run (the v1 DEFAULT) — this was silently breaking the
+  visual layer of every default run. Verify: confirmed on the td1 rebuild (headless shot = blue/red/green/cyan);
+  next fresh placeholder-mode run shows role-distinct entities. (commit: `5d04edf` · skillsys(scaffold).)
+- 2026-06-10 — `write-gdd/SKILL.md` §3.5 — **Added the 4th PLAYABLE-SPACE pillar, CHALLENGE: the threat must
+  contest the reward path.** Trigger: same td1 run — human: "the three batteries don't even face off with any of
+  the dangers." §3.5 had reachability + legibility + onboarding but no challenge criterion, so a spec where the
+  threat is decoupled from the reward path passes every design gate (the run's `PLAN.md` §Playability described
+  the win-path as "collect 3 then exit" with the guard absent from the reasoning; assertions test each mechanic
+  in isolation). W4 then placed the guard in an unvisited corner. **Fix:** W1 now designs CHALLENGE — the core
+  threat lies ON/ASTRIDE the critical-reward path so the loop is a real risk decision; the coupling is recorded
+  per reward/goal in `PLAN.md` for W4 (which reads §Playability) to honor; expressed as a relation (threat
+  contests reward), never genre-hardcoded. Anti-reward-hack: **the human is the eye** for "is it tense" — NO new
+  observable assertion (tension isn't cleanly observable without becoming brittle/hackable). Verify: next run on
+  a DIFFERENT prompt reads as tense (getting a reward means risking the threat). (commit: `cd2b99e` ·
+  skillsys(write-gdd).)
+- 2026-06-10 — **META (recorded, no code edit): green ≠ good.** Both flaws above shipped under
+  `VALIDATION_PASSED ×3` (entry `416eb1b`); the oracle asserts isolated mechanics + "canvas not blank", so it
+  cannot see one-color entities or a threat-less reward path — and the monitor (me) over-reported "proven robust"
+  as "good game." The standing correction: a green W5 means **"the mechanics fire," never "the game is good."**
+  Per the Hermes model this is by design — **the human is the quality eye**; the response is to fix the concrete
+  defects (above) and keep the human as the gate, NOT to add reward-hackable "fun/legibility" assertions.
 - _(future flaws/fixes append here so repeat-flaws become visible and the next diagnosis starts ahead.)_
 
 ## Stewardship note
