@@ -131,12 +131,14 @@ _([repo] generate-gdd "every section maps to a tool input or code file"; ForgeDN
   placeholders). _([repo] generate-gdd Asset Registry; [Y] Chong-U index.json; [E] HuggingFace
   explicit asset list.)_
 
-### 3.5 Design the PLAYABLE SPACE (reachability · legibility · onboarding)
+### 3.5 Design the PLAYABLE SPACE (reachability · legibility · onboarding · challenge)
 
-> **A real player must be able to PLAY and WIN this — not just trigger mechanics in isolation.**
+> **A real player must be able to PLAY and WIN this — and the winning must be EARNED, not just
+> trigger mechanics in isolation.**
 > Filling entities/mechanics/controls is necessary but NOT sufficient: the parts must compose into
-> an experience a real player can actually complete via the documented `controls[]`. Before writing
-> milestones, decide three things and record them in `PLAN.md` (under a new `## Playability` heading):
+> an experience a real player can actually complete via the documented `controls[]` — AND one that
+> demands a real decision to complete. Before writing milestones, decide four things and record them
+> in `PLAN.md` (under a new `## Playability` heading):
 >
 > 1. **WIN-PATH (reachability).** Name the concrete path from the start state to
 >    `winCondition.observable`, expressed ONLY in the player's documented actions — there must EXIST
@@ -162,6 +164,21 @@ _([repo] generate-gdd "every section maps to a tool input or code file"; ForgeDN
 >    GMTK 4-step "introduce the concept in a safe environment… so if you fall you don't lose a life";
 >    [E] Level Design Book "teach, test, twist" + "start slow and quiet"; [E] "Isolation Principle";
 >    [Y] Chong-U "gym level" with debug bounds — which catches the unreachable-platform bug directly.)_
+> 4. **CHALLENGE (the threat must contest the reward — the "interesting decision").** A level that
+>    is reachable, legible, and safely onboarded can STILL be boring: winnable by ignoring the threat
+>    entirely (collect in open space while the enemy patrols an empty corner). So place the core
+>    threat(s) **on or astride the critical / reward path** — collecting the reward and reaching the
+>    goal must push the player into the threat's space, so the core loop is a genuine **risk
+>    decision**, not a detour the player can skip. Encode the RELATION "the threat contests the
+>    reward path" (a hazard on the route to a collectible; a patrol whose area overlaps the goal
+>    approach; an enemy between the player and what they need), **never a genre constant** (not
+>    "guard at x=900"). Record the coupling in `PLAN.md` for EACH reward/goal: which threat contests
+>    it, and where they meet. **W4 honors this placement** (it reads `## Playability`); a level whose
+>    threats sit in unvisited corners is mis-designed — re-place the threat onto the path, never
+>    weaken the loop. This is what makes it a GAME, not a chore — and the human is the eye that it
+>    reads as tense. _([E] Sid Meier "a game is a series of interesting decisions"; [E] Level Design
+>    Book "risk vs reward — the player weighs the danger against the payoff"; [Y] GMTK "tension comes
+>    from threats placed along the player's route, not beside it".)_
 
 ---
 
