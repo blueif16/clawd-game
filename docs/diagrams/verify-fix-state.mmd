@@ -1,0 +1,29 @@
+%% W5 Verify+Fix — the bounded ≤3 self-fix state machine.
+%% The harness owns a persistent per-milestone counter (verify/.fixcycles-MID.json):
+%% once attempts exceed 3 it refuses BEFORE booting Chromium (cost-capped, idempotent).
+stateDiagram-v2
+  [*] --> CheckBound : run verify-milestone PROJECT MID
+
+  state "Boot and serve — build · headless Chromium (swiftshader)" as Boot
+  state "Advance title gate — focus → Enter/Space/click" as AdvanceTitle
+  state "Wait for window.\_\_GAME\_\_.ready" as WaitReady
+  state "Run assertions — setup → input → observe vs expect" as RunAssertions
+  state "VALIDATION_PASSED — write report.json, reset counter" as Passed
+  state "VALIDATION_FAILED" as Failed
+  state "Self-fix (root cause) — edit src/** ONLY, npm run build" as SelfFix
+  state "Honest VALIDATION_FAILED — oracle immutable, correct output" as StopHonest
+  state "Bounded refusal — returns BEFORE booting Chromium" as BoundExceeded
+
+  CheckBound --> BoundExceeded : attempts over 3 (persistent counter)
+  CheckBound --> Boot : within bound
+  Boot --> AdvanceTitle
+  AdvanceTitle --> WaitReady
+  WaitReady --> RunAssertions : ready
+  RunAssertions --> Passed : all pass and booted clean
+  RunAssertions --> Failed : any fail / missing marker
+  Passed --> [*]
+  Failed --> SelfFix : cycles under 3 and NEW failure signature
+  Failed --> StopHonest : 3 cycles OR repeated signature (stall)
+  SelfFix --> CheckBound : re-run harness
+  StopHonest --> [*]
+  BoundExceeded --> [*]

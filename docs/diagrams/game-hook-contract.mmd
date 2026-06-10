@@ -1,0 +1,31 @@
+%% The load-bearing cross-node contract: window.__GAME__
+%% W1 drafts assertions over it → W2 finalizes + exposes the accessor →
+%% W4 populates it from REAL state → W5 reads it to assert. The oracle is immutable.
+sequenceDiagram
+  autonumber
+  participant W1 as W1 · Spec (Designer)
+  participant W2 as W2 · Scaffold (Coder)
+  participant H as window.__GAME__ hook
+  participant W4 as W4 · Implement (Coder)
+  participant W5 as W5 · Verify (Playtester)
+
+  Note over W1,W5: The filesystem is the contract — nodes hand off ONLY via on-disk artifacts
+
+  W1->>H: DRAFT assertions over the hook (observe player.y / score / status …)
+  Note right of W1: writes spec/gdd.json — the IMMUTABLE oracle
+
+  W2->>H: FINALIZE canonical accessor (superset of W1 draft) and template EXPOSES it
+  Note right of W2: template-contract.md §3: ready/status/scene/player/score/entities + snapshot()
+
+  W4->>H: POPULATE from REAL state (score via registry · status set at the real win/lose point)
+  Note right of W4: anti-reward-hack — implement the mechanic so the observable is genuinely true
+
+  W5->>H: READ to assert (setup → input → observe vs expect)
+  H-->>W5: live values
+
+  alt every assertion passes
+    W5->>W5: emit VALIDATION_PASSED
+  else any assertion fails
+    W5->>W4: bounded ≤3 self-fix — edit src/** GAME CODE only
+    Note over W4,W5: NEVER edit gdd / assertions / hook / harness — the oracle stays immutable
+  end

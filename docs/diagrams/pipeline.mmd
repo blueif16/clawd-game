@@ -1,0 +1,34 @@
+%% game-omni pipeline — the runtime spine W0 → W1 → W2 → W3 → (per milestone: W4 → W5)
+%% Edge labels = the on-disk artifacts that are the ONLY coordination channel
+%% (the filesystem is the contract). Node fill = role.
+flowchart TD
+  IN(["args.prompt + args.projectDir"]):::io
+
+  W0["<b>W0 · Classify</b><br/><i>Designer — classify-game</i><br/>physics-first archetype<br/>+ core loop + scope-cut"]:::designer
+  W1["<b>W1 · Spec</b><br/><i>Designer — write-gdd</i><br/>slim GDD + 2–5 milestones,<br/>each with runtime assertions"]:::designer
+  W2["<b>W2 · Scaffold</b><br/><i>Coder — scaffold</i><br/>copy template → empty green<br/>build + expose __GAME__ hook"]:::coder
+  W3["<b>W3 · Assets</b><br/><i>Artist — assets</i><br/>fill asset slots<br/>(placeholder-first)"]:::artist
+
+  subgraph LOOP ["per milestone M1..Mn — SEQUENTIAL (each fully done before the next; W5 writes src/**)"]
+    direction TB
+    W4["<b>W4 · Implement</b><br/><i>Coder — implement-milestone</i><br/>build slice green;<br/>populate __GAME__ for real"]:::coder
+    W5["<b>W5 · Verify + Fix</b><br/><i>Playtester — verify</i><br/>headless assert vs __GAME__"]:::tester
+    W4 -->|"src/** · ticks STRUCTURE.md · MEMORY.md"| W5
+    W5 -->|"VALIDATION_FAILED → ≤3 self-fix (edit src/**)"| W5
+    W5 -->|"next milestone"| W4
+  end
+
+  OUT(["status: game-verified | incomplete"]):::io
+
+  IN -->|"args.prompt"| W0
+  W0 -->|"spec/classification.json"| W1
+  W1 -->|"spec/gdd.json + spec/PLAN.md"| W2
+  W2 -->|"STRUCTURE.md · index.json · window.__GAME__"| W3
+  W3 -->|"public/assets/* · ASSETS.md · index.json"| W4
+  LOOP ==>|"all milestones VALIDATION_PASSED → verify/report.json"| OUT
+
+  classDef designer fill:#dbeafe,stroke:#2563eb,color:#0b2a66;
+  classDef coder fill:#dcfce7,stroke:#16a34a,color:#064e1f;
+  classDef artist fill:#fae8ff,stroke:#a21caf,color:#581c87;
+  classDef tester fill:#fee2e2,stroke:#dc2626,color:#7f1d1d;
+  classDef io fill:#f1f5f9,stroke:#475569,color:#0f172a;
