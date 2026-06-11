@@ -71,8 +71,9 @@ game-omni.js. Each skill cites its provenance inline (repo path or URL) — no r
   (`packages/verify/src/{perturbation,completability,invariants,escalation,blueprint}.ts` + per-milestone
   `report.M<id>.json` writer + the six-gate `bin/verify-milestone.ts`) · `implement-milestone/SKILL.md` Coder→Executor
   rescope · the extended `verify/report.schema.json`. Harness `tsc --noEmit` green; chain `extract.mjs` → 11 stages.
-- **Still open:** a fresh end-to-end validation run on a real game (chromium now installed). R1 (`acceptanceCriteria.assertionId`
-  id-link) + R2 (`rng.*` no-frozen-original sentinel) — RESOLVED 2026-06-10; R3 (baked-config rebuild cost) is measured BY the run.
+- **Validation run DONE (out/frog1, 2026-06-11)** — the redesign is empirically validated AND caught a real design-gate
+  bug; fixes landed (F1–F4 + ≥3-milestones). See the diagnostics log entry below. **Still open:** a RE-RUN (suffix from W1)
+  to confirm the fixes produce a *completable* game for the human to play.
 
 ## Governing docs (owners too)
 - `status.md` — project entry point. `design/pipeline-design-v1.md` — the why (waves, milestone policy,
@@ -323,6 +324,25 @@ session can retrace the evidence behind any edit. A claim with no doc on disk is
   zero behavior change. R3 (baked-config rebuild cost) DEFERRED — empirical, measured by the validation run. The link is
   ANNOTATION-ONLY: it routes which frozen GIVEN decorates which `fidelity[].given` row, never a verdict/envelope. Verify:
   `tsc --noEmit` exit 0 · `node --check` green · `extract.mjs` → 11 stages. (commit: skillsys(game-omni) — this entry.)
+- 2026-06-11 — **VALIDATION RUN (out/frog1, full 7-node Claude run, fresh platformer prompt) + the fixes it drove**
+  (commits 10d691d, fb1e8ed, 23f3bd6). **The redesign is EMPIRICALLY VALIDATED and it caught a real design-gate bug.**
+  M1+M2 PASSED all six gates; the load-bearing PERTURBATION gate ran end-to-end on a real build (M2: 10 params permuted
+  across BOTH seams — baked-config rebuild + runtime — `invariant:true, diverged:[]`), proving D1's two-seam decision +
+  measuring R3 (one rebuild per permuted pass, acceptable). M3 → design escalation: W4 EXECUTOR **HALTED** (NO-INVENTION),
+  VERIFY-2 built-then-empirically-confirmed + escalated to VERIFY-1 (no contortion) + regression-guarded M1/M2 green —
+  the separation of powers working exactly as designed (the old single node would have contorted the build to fake green).
+  **THE BUG:** VERIFY-1 froze + certified `DESIGN_PASSED` a self-contradictory state machine (catch→status `lost` AND
+  respawn→status `playing`, but the harness treats `lost`/`won` as TERMINAL — no faithful build satisfies both;
+  `out/frog1/verify/escalations.M3.json`). **FIXES (human-approved):** F1/F4 (10d691d) — respawn loops are NON-TERMINAL
+  (status stays `playing`; "caught" on a distinct observable — `lives` decrement / player-returns-to-spawn; terminal
+  `lost` only for game-over) + terminal ACs carry a near-goal precondition (W1 authors / VERIFY-1 proves). F2/F3
+  (fb1e8ed) — harness verdict-correctness: status-legality (+monotonic/no-softlock) reset their baseline at each
+  independent `setup` precondition (a `won`→`playing` across two injected probes is NOT an illegal edge), and
+  `{event:reset}`→`commands.reset()`. ≥3 milestones + reachable-completion anchor (23f3bd6) per human feedback (3 stages
+  exercise the reused harness; the final milestone's win must be REACHABLE — the human collected the reward but the game
+  wouldn't end, because M3 was correctly reverted). Verify: `tsc` 0 · `node --check` · `extract` 11 stages. OPEN: a
+  RE-RUN (suffix from W1) to confirm the fixes yield a completable frog game for the human's eye. (evidence:
+  `out/frog1/verify/*` + screenshots; research: `~/.claude/research/verify-node-construction-best-practices.md`.)
 - _(future flaws/fixes append here so repeat-flaws become visible and the next diagnosis starts ahead.)_
 
 ## Stewardship note
