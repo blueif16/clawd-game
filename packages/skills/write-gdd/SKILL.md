@@ -120,8 +120,23 @@ _([repo] generate-gdd "every section maps to a tool input or code file"; ForgeDN
 - **`winCondition` / `loseCondition`** — each `{description, observable}`. The `observable` is
   the live-game-object signal (e.g. `"__GAME__.status === 'won'"`, `"__GAME__.player.health <= 0"`)
   that becomes the FINAL milestone's win/lose assertion. Derive these from the core loop's
-  goal/fail clauses. If the game truly can't be lost, set lose `description:"none"` and use the
-  reset signal. _([E] SenseCentral "write how the player wins, how the player loses".)_
+  goal/fail clauses. **STATUS-MODEL COHERENCE (status is monotonic-terminal):** `__GAME__.status`
+  `'won'`/`'lost'` are **TERMINAL sinks** — the harness's status-legality invariant forbids any edge
+  OUT of them except a full reboot (no `lost->playing`, no `won->playing`). So a **respawn / soft-fail
+  / checkpoint loop is NON-TERMINAL**: on a recoverable catch/fall the design recovers from, `status`
+  **STAYS `'playing'`** and the player is reset — NEVER `status:'lost'`. Therefore author the lose seam
+  on a **DISTINCT observable, never the terminal `status`**: for a **lives-based** design observe
+  `lives` **decrement** (monotonic-down) and reserve `status:'lost'` for the genuine game-over
+  (`lives==0` / no recovery); for a **pure-respawn** design (infinite retries, no lives) observe the
+  player **RETURNING TO SPAWN** (`player.x`/`player.y` back at the spawn coords) while `status` stays
+  `'playing'` — such a game may have **NO terminal lose at all** (the only terminal state is the win),
+  in which case `loseCondition.observable` describes the **SOFT RESET** (player→spawn, status stays
+  `'playing'`), NOT `status==='lost'`. Encode the RELATION (terminal status is monotonic; a recoverable
+  fail is non-terminal on a distinct observable), never a genre constant. If the game truly can't be
+  lost, set lose `description:"none"` and use the reset signal. _([E] SenseCentral "write how the player
+  wins, how the player loses"; [repo] `packages/verify/src/invariants.ts isLegalStatusTransition` —
+  'won'/'lost' terminal, immutable; 2026-06-11 frog1 escalation — a `catch->'lost'` + `respawn->'playing'`
+  pair is the contradiction the harness forbids.)_
 - **`config`** — tuning numbers (flat `key: number`), keys matching the archetype's config
   schema (§2). Optional but recommended.
 - **`assetList[]`** — the art/audio as slots: `{slot, type, description, +frames/width/height}`.
@@ -259,7 +274,15 @@ never engine internals):
    player would actually use) and assert the win observable becomes true — e.g. `observe:"status",
    expect:{equals:"won"}` (grid: also `moveCount atMost maxMoves`; TD: `lives atLeast 1` at win;
    ui_heavy: `enemyHP atMost 0`). This proves a real player can WIN via the verb, not merely that the
-   verb moves a number. **It asserts OBSERVABLE state only and is satisfiable ONLY by a genuinely
+   verb moves a number. **NEAR-GOAL PRECONDITION (terminal ACs):** the win/terminal assertion MUST
+   carry a `setup` that PLACES the player at the **goal precondition** — the gating state met (e.g.
+   `score>=N`) AND a position **one short documented-input hop from the goal** — so the downstream
+   verifier drives only a few inputs from a KNOWN precondition and observes the terminal transition. It
+   must NEVER require a generic driver to NAVIGATE the full tense level (cross every gap + run the
+   threat gauntlet) to the goal — that crossing is exactly what no generic bot can do, and authoring the
+   terminal AC to demand it re-introduces the broken-navigator failure the redesign forbids. Encode the
+   RELATION "place the player one documented hop from the goal with the gate satisfied," never a genre
+   constant. **It asserts OBSERVABLE state only and is satisfiable ONLY by a genuinely
    completable level — it is un-fakeable (W5 §7) and de-hardcoded (it names the player's actions +
    the win signal, never a genre constant like a jump height).** **M1 additionally asserts the core
    verb is usable in the safe onboarding setting** (the verb's observable changes with no fail-state
@@ -339,7 +362,7 @@ spike resets the attempt."`, `coreVerb:"jump"`:
     { "input": "ArrowUp", "action": "jump" }
   ],
   "winCondition": { "description": "Reach the exit door.", "observable": "__GAME__.status === 'won'" },
-  "loseCondition": { "description": "Hit a spike or fall off-screen.", "observable": "__GAME__.status === 'lost'" },
+  "loseCondition": { "description": "Hit a spike or fall off-screen resets the attempt — the frog respawns at the start; status stays 'playing' (pure-respawn, no terminal lose).", "observable": "__GAME__.player.x near spawn.x && __GAME__.status === 'playing'" },
   "config": { "gravityY": 1200, "jumpPower": 620, "walkSpeed": 200 },
   "assetList": [
     { "slot": "player", "type": "animation", "description": "side-view hero facing right", "frames": ["idle", "run", "jump"] },
@@ -368,23 +391,23 @@ spike resets the attempt."`, `coreVerb:"jump"`:
       "goal": "The player can collect coins (score rises) and dies to spikes — the risk/reward is playable.",
       "acceptanceCriteria": [
         "Overlapping a coin increments the score.",
-        "Touching a spike sets status to lost."
+        "Touching a spike respawns the player at spawn (status stays 'playing' — recoverable, not terminal)."
       ],
       "assertions": [
         { "id": "M2-A1", "describe": "overlapping a coin increments score", "input": { "type": "event", "target": "overlap:player,coin" }, "observe": "score", "expect": { "increases": true } },
-        { "id": "M2-A2", "describe": "touching a spike sets status to lost", "input": { "type": "event", "target": "overlap:player,spike" }, "observe": "status", "expect": { "equals": "lost" } }
+        { "id": "M2-A2", "describe": "touching a spike respawns the player to spawn.x (status stays 'playing', NOT 'lost' — this is a recoverable soft-fail)", "setup": { "state": { "player": { "x": 420, "y": 300 } } }, "input": { "type": "event", "target": "overlap:player,spike" }, "observe": "player.x", "expect": { "equals": 32 } }
       ]
     },
     {
-      "id": "M3", "name": "Win, lose, restart",
-      "goal": "Reaching the exit wins; the lose state resets — the game can finish.",
+      "id": "M3", "name": "Win at the exit; soft-reset on fail",
+      "goal": "Reaching the exit wins (terminal); a spike/fall soft-resets to spawn without ending the run — the game can finish.",
       "acceptanceCriteria": [
-        "Reaching the exit sets status to won.",
-        "After a lose, the attempt resets to a playable state."
+        "From one hop short of the exit, reaching it sets status to won.",
+        "A fail mid-level returns the player to spawn with status still 'playing' (non-terminal)."
       ],
       "assertions": [
-        { "id": "M3-A1", "describe": "reaching the exit sets status to won", "input": { "type": "event", "target": "overlap:player,exit" }, "observe": "status", "expect": { "equals": "won" } },
-        { "id": "M3-A2", "describe": "after losing, status returns to playing on restart", "setup": { "state": { "status": "lost" } }, "input": { "type": "event", "target": "restart" }, "observe": "status", "expect": { "equals": "playing" } }
+        { "id": "M3-A1", "describe": "from spawn one hop short of the exit (placed precondition), reaching the exit sets status to won", "setup": { "state": { "score": 1, "player": { "x": 600, "y": 300 } } }, "input": { "type": "keyHold", "key": "ArrowRight", "durationMs": 300 }, "observe": "status", "expect": { "equals": "won" } },
+        { "id": "M3-A2", "describe": "a mid-level fail returns the player to spawn while status stays 'playing' (non-terminal soft reset, never a 'lost' sink)", "setup": { "state": { "player": { "x": 420, "y": 300 } } }, "input": { "type": "event", "target": "overlap:player,spike" }, "observe": "player.x", "expect": { "equals": 32 } }
       ]
     }
   ]
@@ -394,9 +417,13 @@ This is a *shape* reference. A grid_logic or tower_defense prompt yields differe
 controls, observables (`moveCount`/`gold`/`lives`), and a different milestone count.
 
 > **Note (per §5 rule 5):** the assertions shown above check mechanics in isolation. A real GDD's
-> FINAL milestone must ALSO carry the §5 **reachability assertion** — fire the documented `controls[]`
-> toward the goal (here: a bounded run/jump sequence to the exit) and assert `status` becomes `"won"`
-> — so the spec proves a player can WIN the level via the verb, not just that the verb moves a number.
+> FINAL milestone must ALSO carry the §5 **reachability assertion** — from a **near-goal `setup`**
+> (the gate satisfied + the player placed one short hop from the exit, as M3-A1 does), fire a few
+> documented `controls[]` and assert `status` becomes `"won"` — so the spec proves a player can WIN the
+> level via the verb without asking a generic driver to navigate the full tense crossing. Note too that
+> the fail seam (M2-A2 / M3-A2) is modeled **non-terminal** (player→spawn, `status` stays `'playing'`),
+> because this coreLoop "resets the attempt" — a pure-respawn game with no terminal lose (per §3
+> STATUS-MODEL COHERENCE).
 
 ---
 
@@ -426,9 +453,12 @@ controls, observables (`moveCount`/`gold`/`lives`), and a different milestone co
   the bug Bucket 3 names. Re-place the goal/required affordances within the player's reach (§3.5
   WIN-PATH); do NOT drop the assertion or relax `winCondition`. A level with no authorable win-path
   must not ship.
-- **Game with no lose state** (e.g. an endless/sandbox toy). Set `loseCondition.description:
-  "none"` and make the final milestone's end-state the win and/or a meaningful reset; the final
-  milestone still must have a checkable end-state assertion.
+- **Game with no lose state** (e.g. an endless/sandbox toy, OR a pure-respawn game with infinite
+  retries). There is **no terminal `status:'lost'`** — set `loseCondition` to the SOFT RESET (player→spawn,
+  `status` stays `'playing'`) per §3 STATUS-MODEL COHERENCE, or `description:"none"` for a true sandbox.
+  The final milestone's terminal end-state is the WIN; it still must have a checkable end-state assertion
+  (authored from a near-goal precondition per §5 rule 5). Never author a `catch->'lost'` + `respawn->'playing'`
+  pair — that is the contradiction the terminal status-legality invariant forbids.
 
 ## 8. PI-PORTABILITY NOTE (for the workflow author)
 This node is a single `agent()` call with a forced-JSON output matching `gdd.schema.json` — no

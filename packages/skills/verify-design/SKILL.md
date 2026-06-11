@@ -116,13 +116,19 @@ in named principles.
    the **reference INTENDED SOLUTION** (a concrete action sequence that wins while engaging the threat) —
    proof-by-existence the design is winnable. _([best-practices §Q7 reachability + kinematic gap/jump math
    + "generate a reference solution… proof by existence it's solvable".)_
-4. **BLUEPRINT COMPLETENESS / PRECISION (§5) — decidable.** Is every concrete number the executor needs
-   present and unambiguous (speeds, coordinates, patrol routes + timings, gap widths, counts, the exact
-   win/lose/respawn flow)? Plug min/max plausible values into every numeric relationship; flag degenerate
-   outputs (negative, divide-by-zero, infinity, nonsensical). If underspecified → **HARDEN** it (you are
-   the design authority — fill the number) so W4 never guesses. No "feels fun," no hand-wave. _([best-practices
-   §Q1 "implementability… precisely enough that a developer could implement it"; systems-designer
-   "boundary values into every formula… flag degenerate"; qa-lead "no 'feels balanced' — only testable".)_
+4. **BLUEPRINT COMPLETENESS / PRECISION + STATUS-MODEL COHERENCE (§5) — decidable.** Is every concrete
+   number the executor needs present and unambiguous (speeds, coordinates, patrol routes + timings, gap
+   widths, counts, the exact win/lose/respawn flow)? Plug min/max plausible values into every numeric
+   relationship; flag degenerate outputs (negative, divide-by-zero, infinity, nonsensical). **AND is the
+   win/lose/RESPAWN state machine COHERENT with the immutable terminal status model** — `status`
+   `'won'`/`'lost'` are TERMINAL sinks (no `lost->playing` / `won->playing` edge), so a frozen flow whose
+   respawn implies an edge OUT of a terminal status is **internally contradictory and unbuildable** (the
+   frog1 defect, §10). If underspecified → **HARDEN** it; if status-incoherent → **RE-MODEL** the
+   recoverable fail as a non-terminal soft reset on a DISTINCT observable (you are the design authority —
+   §5). No "feels fun," no hand-wave. _([best-practices §Q1 "implementability… precisely enough that a
+   developer could implement it"; systems-designer "boundary values into every formula… flag degenerate";
+   qa-lead "no 'feels balanced' — only testable"; `packages/verify/src/invariants.ts` terminal
+   status-legality.)_
 5. **FANTASY REALIZED (§6).** Do the mechanics deliver the stated `coreFantasy` / `coreLoop`? Does the
    core verb feel central (not a sideshow)? Does collecting/acting MATTER beyond a counter (it changes
    the player's situation, gates the win, or buys safety)? _([E] StraySpark "player fantasy"; [best-practices
@@ -273,13 +279,30 @@ a concrete value, grounded in the §3 feasibility math (never a guess that break
   threat position + its **patrol route** (waypoints) + **timing** (speed or per-segment duration).
 - **Counts:** exact number of each entity (3 batteries, 2 patrols, N waves), consistent with the win
   condition (e.g. "collect all 3" ⇒ 3 collectibles placed, all reachable per §3).
-- **The exact win / lose / RESPAWN flow:** the precise state machine — what sets `status:'won'` (e.g.
-  "overlap player↔exit AFTER score≥3"), what sets `status:'lost'` (e.g. "overlap player↔guard" /
-  "player.health≤0" / "lives==0"), and **what happens on lose** (respawn-at-checkpoint vs full-restart vs
-  game-over screen → `commands.reset` to `status:'playing'`). The respawn flow is the most commonly
-  under-specified piece and the executor cannot invent it. _([best-practices §Q1 "edge cases / failure
-  states per mechanic surface design gaps early"; template-contract §3.3 status normalization is the
-  observable target.)_
+- **The exact win / lose / RESPAWN flow — and it MUST be STATUS-MODEL COHERENT:** the precise state
+  machine — what sets `status:'won'` (e.g. "overlap player↔exit AFTER score≥3"), what sets `status:'lost'`
+  (a GENUINE game-over only: "player.health≤0" / "lives==0" / no recovery), and **what happens on a
+  recoverable fail**. `status` `'won'`/`'lost'` are **TERMINAL sinks** — the immutable status-legality
+  invariant (`packages/verify/src/invariants.ts isLegalStatusTransition`: 'won'/'lost' terminal) forbids
+  any edge OUT of them except a reboot, so a frozen flow that implies `lost->playing` or `won->playing`
+  is **internally contradictory and unbuildable** — DETECT it and HARDEN (never weaken):
+  - A **respawn / soft-fail / checkpoint loop is NON-TERMINAL.** On a recoverable catch/fall the design
+    recovers from, `status` **STAYS `'playing'`** and the player is reset; re-model the lose seam onto a
+    **DISTINCT observable, never the terminal `status`** — **lives-based** → `lives` decrement
+    (monotonic-down), reserve `status:'lost'` for `lives==0`; **pure-respawn** (infinite retries) → the
+    player **returning to spawn** (`player.x`/`player.y` at spawn coords) while `status` stays `'playing'`,
+    with possibly **no terminal lose at all** (only the win is terminal). Author the corresponding AC over
+    that distinct observable, NOT over `status==='lost'`.
+  - Reserve terminal `status:'lost'` for the genuine game-over. If W1 froze a `catch->'lost'` plus a
+    `respawn->'playing'` for the SAME recoverable mechanic (the frog1 contradiction, §10), that is the
+    seam to RE-MODEL here as a non-terminal soft reset — keep `status` monotonic-terminal; never admit a
+    `lost->playing` edge and never edit the harness invariant (it is IMMUTABLE; the design conforms to it).
+  Encode the RELATION (terminal status is monotonic; a recoverable fail is non-terminal on a distinct
+  observable), never a genre constant. The respawn flow is the most commonly under-specified piece and the
+  executor cannot invent it. _([best-practices §Q1 "edge cases / failure states per mechanic surface design
+  gaps early"; template-contract §3.3 status normalization is the observable target;
+  `packages/verify/src/invariants.ts isLegalStatusTransition` — 'won'/'lost' terminal, immutable;
+  2026-06-11 frog1 escalation, §10.)_
 - **Boundary-value sweep:** for every numeric relationship, plug the min and max plausible values and
   confirm no degenerate output (a `maxMoves` of 0, a `jumpPower` that overshoots the whole level, a patrol
   speed that makes a window negative). Record any value you clamped. _([best-practices §Q1 systems-designer
@@ -303,7 +326,17 @@ numbers** into explicit Given/When/Then form, expressed ONLY in the `__GAME__` o
 player at spawn (32,300), When hold ArrowRight 0.6s then ArrowUp, Then player.x ≥ 320 and player.y not
 increased past the spike row" is a checkable fidelity statement, not a vibe). Every acceptance criterion
 must be **independently testable** — reject any that reduces to "feels balanced / works correctly /
-performs well." These ACs become VERIFY-2's fidelity contract. _([best-practices §Q1 qa-lead "flag any AC
+performs well." **NEAR-GOAL PRECONDITION for terminal/win ACs (mandatory).** The win/terminal AC's `given`
+MUST place the player **at the goal precondition** — the gating state met (e.g. `score>=N`) AND a position
+**one short documented-input hop from the goal** (e.g. `given: "player at (600,300) one hop from exit@640,
+score 3"`) — so VERIFY-2 fires a few inputs from a KNOWN precondition and observes the terminal transition.
+It must **NEVER** require VERIFY-2's generic driver to NAVIGATE the full tense level (cross every gap + run
+the threat gauntlet) to reach the goal — that crossing is exactly the broken-navigator case the redesign's
+"never ask a generic bot to beat a tense level" doctrine forbids, and authoring the terminal AC's `given`
+at spawn (forcing the full crossing) leaks it back in. The reference solution (§3) proves the full crossing
+is winnable; the AC's `given` short-circuits it to a near-goal precondition VERIFY-2 can actually drive.
+Encode the RELATION "place the player one documented hop from the goal with the gate satisfied," never a
+genre constant. These ACs become VERIFY-2's fidelity contract. _([best-practices §Q1 qa-lead "flag any AC
 that is not independently testable"; §Q8 "ACs → executable acceptance tests (BDD/Gherkin)… map almost
 directly to automated test code"; write-gdd/SKILL.md §5 the assertion model already = Given→When→Then over
 observable state.)_
@@ -381,7 +414,7 @@ requires (`meta`, `entities`, `mechanics`, `controls`, `winCondition`, `loseCond
   // ── carried + hardened from gdd.json (config now complete; numbers concrete) ──
   "meta": { … }, "entities": [ … ], "mechanics": [ … ], "controls": [ … ],
   "winCondition": { "description": …, "observable": "__GAME__.status === 'won'" },
-  "loseCondition": { "description": …, "observable": "__GAME__.status === 'lost'" },
+  "loseCondition": { "description": …, "observable": "__GAME__.status === 'lost'" },  // status-model COHERENT: 'lost' here is a TERMINAL game-over (patrol contact = death). A pure-respawn design would instead observe player→spawn while status stays 'playing' (§5) — never a catch->'lost' + respawn->'playing' pair.
   "config": { "gravityY": 1200, "jumpPower": 620, "walkSpeed": 200 },   // COMPLETE — no missing tunable
   "assetList": [ … ],
 
@@ -422,8 +455,8 @@ requires (`meta`, `entities`, `mechanics`, `controls`, `winCondition`, `loseCond
   },
   "acceptanceCriteria": [           // §5: Given/When/Then in the __GAME__ vocabulary → VERIFY-2's fidelity contract
     { "id": "AC-M3-win", "milestone": "M3", "assertionId": "M3-A1",   // assertionId = the gdd assertion this AC upgrades (1:1; pairs the GIVEN by id)
-      "given": "player at spawn (32,300), score 3 (all coins collected)",
-      "when":  "fire controls toward exit per referenceSolution",
+      "given": "player at (600,300) ONE hop from exit@640, score 3 (gate satisfied)",   // NEAR-GOAL precondition (§5): VERIFY-2 drives a few inputs from here — it does NOT navigate the full tense crossing (referenceSolution carries that winnability proof)
+      "when":  "keyHold ArrowRight 300ms (the final documented hop onto the exit)",
       "then":  "__GAME__.status === 'won'",
       "observable": "status", "expect": { "equals": "won" } }, …
   ],
@@ -453,7 +486,7 @@ _Archetype: <archetype> · Core loop: <coreLoop> · The interesting decision: <o
 1. Interesting decision — PASS — <reward> vs <threat>; getting it requires entering <region>.
 2. Threat-on-reward-path — PASS — no threat-free path to any reward/goal (BFS/geodesic shown below).
 3. Winnability (kinematics) — PASS — every gap ≤ d_max(206.7), every required rise ≤ h_max(159.8); passable window 900ms ≥ dwell.
-4. Completeness — HARDENED — filled patrol route+timing, respawn flow, 3 coin coords.
+4. Completeness + status-model coherence — HARDENED — filled patrol route+timing, 3 coin coords; win/lose/respawn flow coherent with terminal status (recoverable fail kept non-terminal on a distinct observable; 'lost' reserved for game-over).
 5. Fantasy — PASS / 6. Onboarding — PASS / 7. Pillar alignment — PASS.
 
 ## The reference intended solution (proof it's winnable AND requires the decision)
@@ -548,6 +581,26 @@ design node, never to the executor"; §Q8 "hitting limits is a feature — surfa
 - **A tunable / coordinate / respawn flow is missing.** Do NOT leave it for the executor (W4 HALTS on a
   missing number by design). FILL it (criterion 4, §5) with a concrete value grounded in the feasibility
   math. The completeness of the blueprint is what lets W4 have zero latitude.
+- **A status-INCOHERENT win/lose/respawn flow (the frog1 defect).** This is a headline failure this node
+  must catch: W1 froze a SELF-CONTRADICTORY state machine — `catch -> status:'lost'` AND
+  `respawn -> status:'playing'` for the SAME recoverable mechanic — and the old rubric let it pass
+  DESIGN_PASSED. No faithful build can satisfy it: the immutable status-legality invariant
+  (`packages/verify/src/invariants.ts`, 'won'/'lost' TERMINAL) forbids the implied `lost->playing` edge,
+  so the executor HALTED and VERIFY-2 escalated a frozen-oracle contradiction (out/frog1/verify/
+  escalations.M3.json + MEMORY.md §"W4 — M3", 2026-06-10/11). Criterion 4 (§5) now catches it: DETECT the
+  implied edge OUT of a terminal status and RE-MODEL the recoverable fail as a NON-TERMINAL soft reset on a
+  distinct observable (lives decrement, or player→spawn while `status` stays `'playing'`), reserving
+  terminal `'lost'` for a genuine game-over. You do NOT pass it, you do NOT edit the harness invariant, and
+  a pure-respawn design may correctly have NO terminal lose at all. _(out/frog1 2026-06-11 escalation;
+  `packages/verify/src/invariants.ts` terminal status-legality.)_
+- **A terminal/win AC whose `given` forces the full tense crossing (the frog1 F4 defect).** In frog1, M3's
+  win ACs were authored at spawn, so VERIFY-2's generic driver had to navigate the entire tense level (4
+  gaps + the heron sweep) to the burrow — which no generic bot can do (out/frog1/verify/escalations.M3.json
+  harnessVerdictCorrectnessNotes). The terminal AC's `given` MUST instead place the player one short
+  documented hop from the goal with the gate satisfied (§5 near-goal precondition), so VERIFY-2 drives a
+  few inputs from a KNOWN precondition; the reference solution (§3) carries the full-crossing winnability
+  proof. Authoring the terminal `given` at spawn re-introduces the broken-navigator class the redesign
+  forbids. _(out/frog1 2026-06-11 escalation; SKILL §3 "VERIFY-2 must NEVER navigate a tense level".)_
 - **An acceptance criterion isn't independently testable** ("feels balanced", "works correctly"). Rewrite
   it as an observable Given/When/Then over the `__GAME__` vocabulary, or drop it. VERIFY-2 can only check
   observable ACs. _([best-practices §Q1 qa-lead.)_
