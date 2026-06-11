@@ -348,6 +348,21 @@ session can retrace the evidence behind any edit. A claim with no doc on disk is
   wouldn't end, because M3 was correctly reverted). Verify: `tsc` 0 · `node --check` · `extract` 11 stages. OPEN: a
   RE-RUN (suffix from W1) to confirm the fixes yield a completable frog game for the human's eye. (evidence:
   `out/frog1/verify/*` + screenshots; research: `~/.claude/research/verify-node-construction-best-practices.md`.)
+- 2026-06-10 — `write-gdd/SKILL.md` — `spec/gdd.json` must be STRICT-JSON-valid (RFC 8259): no inline
+  comments (`//`, `/* */`) / trailing commas / JS literals; any assumption/provenance note goes in a JSON
+  string field (`describe`/`_note`) or PLAN.md prose, never inline. Trigger: the tower1 run — W1 wrote
+  `/* assuming spawnX is 100 */`-style comments → invalid JSON that would boot-fail VERIFY-2's strict parse
+  (verify-milestone.ts:134), where the assertion oracle LIVES; the node's `parsedOk` validated the returned
+  object, not the bytes on disk (they diverged). Verify: every produced gdd.json passes a strict JSON.parse.
+  (skillsys e54553a; supporting: `out/tower1/spec/gdd.json`.)
+- 2026-06-10 — `verify-design/SKILL.md` — blueprint completeness MUST FAIL (and HARDENING must ADD the
+  geometry) unless every spatial element that `coupling[]` / `referenceSolution` / the core traversal
+  references is a DECLARED `layout` element with in-`bounds` coordinates ("referenced ⇒ declared",
+  archetype-agnostic — footholds/lanes/tiles/path-nodes/regions, no genre constants). Trigger: the tower1 run
+  froze `completeness=PASS` while `layout` omitted the platform/ledge geometry its OWN coupling notes ("jump
+  from the platform below") + the "jump between ledges" loop depend on; W4 would invent it or fall back to a
+  template. Verify: no blueprint passes completeness while a referenced element is absent from `layout`/out of
+  bounds. (skillsys f049b98; supporting: `out/tower1/spec/blueprint.json` + `DESIGN_REVIEW.md`.)
 - _(future flaws/fixes append here so repeat-flaws become visible and the next diagnosis starts ahead.)_
 
 ## Stewardship note
