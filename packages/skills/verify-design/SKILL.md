@@ -118,7 +118,11 @@ in named principles.
    + "generate a reference solution… proof by existence it's solvable".)_
 4. **BLUEPRINT COMPLETENESS / PRECISION + STATUS-MODEL COHERENCE (§5) — decidable.** Is every concrete
    number the executor needs present and unambiguous (speeds, coordinates, patrol routes + timings, gap
-   widths, counts, the exact win/lose/respawn flow)? Plug min/max plausible values into every numeric
+   widths, counts, the exact win/lose/respawn flow)? **AND is every spatial element referenced by
+   `coupling[]` / `referenceSolution` / the core traversal actually DECLARED in `layout` with in-`bounds`
+   coordinates** — completeness MUST NOT PASS while any referenced foothold/waypoint/region the solution
+   path rests on or routes through is undeclared (the "referenced ⇒ declared" closure, §5; HARDEN by adding
+   it, never pass-by-omission). Plug min/max plausible values into every numeric
    relationship; flag degenerate outputs (negative, divide-by-zero, infinity, nonsensical). **AND is the
    win/lose/RESPAWN state machine COHERENT with the immutable terminal status model** — `status`
    `'won'`/`'lost'` are TERMINAL sinks (no `lost->playing` / `won->playing` edge), so a frozen flow whose
@@ -277,6 +281,17 @@ a concrete value, grounded in the §3 feasibility math (never a guess that break
 - **Entity placement** (`layout`): concrete spawn/goal/reward/threat **coordinates** (or grid cells), so
   the level is fully determined. The player spawn, the goal position, every collectible position, every
   threat position + its **patrol route** (waypoints) + **timing** (speed or per-segment duration).
+  - **REFERENCED ⇒ DECLARED (the completeness closure — archetype-agnostic).** Every spatial element that
+    `coupling[]`, `referenceSolution.steps[]`, or the §3 core traversal **names, stands on, or passes
+    through** MUST exist as a DECLARED element in `layout` with coordinates **inside `bounds`** — whatever
+    footholds/waypoints/regions/lanes/tiles the intended solution path rests on or routes across (a
+    platformer ledge the jump lands on, a top_down safe lane the approach uses, a grid tile the BFS path
+    steps onto, a TD path node, a UI region a turn targets). If the reference solution or a coupling note
+    says the player "jumps from / waits on / routes through" X, then X is a layout element with a position,
+    not prose. **HARDEN** by ADDING the missing geometry (derive its coordinates from the §3 feasibility
+    math so the path it serves stays clearable) — never leave it implied for W4 to invent or for a template
+    default to silently supply. The blueprint is complete only when NO referenced spatial element is
+    undeclared.
 - **Counts:** exact number of each entity (3 batteries, 2 patrols, N waves), consistent with the win
   condition (e.g. "collect all 3" ⇒ 3 collectibles placed, all reachable per §3).
 - **The exact win / lose / RESPAWN flow — and it MUST be STATUS-MODEL COHERENT:** the precise state
