@@ -71,9 +71,14 @@ game-omni.js. Each skill cites its provenance inline (repo path or URL) — no r
   (`packages/verify/src/{perturbation,completability,invariants,escalation,blueprint}.ts` + per-milestone
   `report.M<id>.json` writer + the six-gate `bin/verify-milestone.ts`) · `implement-milestone/SKILL.md` Coder→Executor
   rescope · the extended `verify/report.schema.json`. Harness `tsc --noEmit` green; chain `extract.mjs` → 11 stages.
-- **Validation run DONE (out/frog1, 2026-06-11)** — the redesign is empirically validated AND caught a real design-gate
-  bug; fixes landed (F1–F4 + ≥3-milestones). See the diagnostics log entry below. **Still open:** a RE-RUN (suffix from W1)
-  to confirm the fixes produce a *completable* game for the human to play.
+- **Validation run DONE (out/frog1, 2026-06-11):** the redesign is empirically validated AND caught a real design-gate
+  bug; fixes landed (F1–F4 + ≥3-milestones — see the diagnostics log).
+- **OPEN CAPTURE — the next OPERATE loop starts here (captured, not yet routed/edited; human said stop):** _multi-level
+  progression._ **symptom:** human (playing `out/frog1`) "never can access level 2." **root cause:** milestones are
+  build-slices of ONE level → the game has no level progression. **rule (to encode):** a game has ≥3 playable LEVELS
+  that REUSE level-1's engine (level1→…→win); "3 stages per game" = LEVELS, not verify-milestones. **route:** W0/W1
+  design + scaffold `LevelManager`/`BaseLevelScene` wiring + the milestone↔level mapping (reconcile with the
+  ≥3-milestone edit `23f3bd6`).
 
 ## Governing docs (owners too)
 - `status.md` — project entry point. `design/pipeline-design-v1.md` — the why (waves, milestone policy,
