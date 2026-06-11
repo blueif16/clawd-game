@@ -162,9 +162,9 @@
 
     "milestones": {
       "type": "array",
-      "minItems": 2,
+      "minItems": 3,
       "maxItems": 5,
-      "description": "Carried from gdd, hardened against concrete numbers. 2–5 playable vertical slices.",
+      "description": "Carried from gdd, hardened against concrete numbers. 3–5 playable vertical slices (never fewer than 3).",
       "items": {
         "type": "object",
         "additionalProperties": false,

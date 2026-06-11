@@ -33,7 +33,7 @@ export const meta = {
   description: 'Prompt -> verified, playable Phaser 2D web game in one pass. Nodes coordinate through on-disk artifacts; each loads an evidence-grounded skill. Pi-portable.',
   phases: [
     { title: 'W0 Classify', detail: 'Designer: route prompt -> physics-first archetype + one-line core loop + explicit scope-cut. Writes spec/classification.json.' },
-    { title: 'W1 Spec', detail: 'Designer: slim GDD + milestone list (2-5) with per-milestone runtime assertions. Writes spec/gdd.json + spec/PLAN.md.' },
+    { title: 'W1 Spec', detail: 'Designer: slim GDD + milestone list (3-5) with per-milestone runtime assertions. Writes spec/gdd.json + spec/PLAN.md.' },
     { title: 'VERIFY-1 Design', detail: 'Design Critic (pre-code, static): judge + HARDEN the thesis into a winnable, complete, frozen blueprint (rubric + kinematic feasibility + threat-on-path). Writes spec/blueprint.json + spec/DESIGN_REVIEW.md.' },
     { title: 'W2 Scaffold', detail: 'Coder: copy genre template -> running empty project + STRUCTURE.md + index.json (asset slots); merges the blueprint\'s COMPLETE config.' },
     { title: 'W3 Assets', detail: 'Artist: fill public/assets/ + ASSETS.md from index.json. Placeholder-first (gemini toggle).' },
@@ -127,7 +127,7 @@ Write exactly one file: ${PROJECT}/spec/classification.json (create ${PROJECT}/s
 // W1 — Spec  (skill: packages/skills/write-gdd/SKILL.md)
 // Reads:  ${PROJECT}/spec/classification.json  (archetype, coreLoop, coreVerb, physicsProfile, scopeCut)
 // Writes: ${PROJECT}/spec/gdd.json + ${PROJECT}/spec/PLAN.md
-// Schema inlined from packages/skills/write-gdd/gdd.schema.json — slim gameDNA + 2-5 milestones,
+// Schema inlined from packages/skills/write-gdd/gdd.schema.json — slim gameDNA + 3-5 milestones,
 // each carrying executable runtime assertions (Given setup -> When input -> Then observe+expect)
 // over window.__GAME__. W2 must EXPOSE that hook; W5 EXECUTES these assertions. (Emergent contract:
 // W1 committed the assertion shape; downstream nodes absorb it.)
@@ -253,8 +253,8 @@ const GDD_SCHEMA = {
       },
     },
     milestones: {
-      type: 'array', minItems: 2, maxItems: 5,
-      description: '2-5 PLAYABLE slices (default 3) in build order. M1 = core loop plays; last includes an end-state.',
+      type: 'array', minItems: 3, maxItems: 5,
+      description: '3-5 PLAYABLE slices (default 3) in build order. M1 = core loop plays; last includes an end-state.',
       items: {
         type: 'object', additionalProperties: false,
         required: ['id', 'name', 'goal', 'acceptanceCriteria', 'assertions'],
@@ -271,11 +271,11 @@ const GDD_SCHEMA = {
 }
 
 phase('W1 Spec')
-log('game-omni: writing slim GDD + 2-5 playable milestones with runtime assertions')
+log('game-omni: writing slim GDD + 3-5 playable milestones with runtime assertions')
 const w1 = await agent(
   nodePrompt('packages/skills/write-gdd/SKILL.md', `You are the W1 Spec node (Designer role). Read ${PROJECT}/spec/classification.json from disk (the original prompt is its \`prompt\` field).
 
-Design the slim Game Design Doc CONSTRAINED to the chosen archetype template's capabilities, and decompose classification.coreLoop into 2-5 PLAYABLE milestones (default 3): M1 = the core loop plays at all; the final milestone includes a win and/or lose end-state. For each milestone write acceptance criteria + executable runtime assertions (Given setup -> When input -> Then observe+expect) over the live game object window.__GAME__, 1:1 with the criteria, asserting OBSERVABLE behavior never implementation. Respect classification.scopeCut as a hard boundary; never invent a capability the template lacks; never cut the juice.
+Design the slim Game Design Doc CONSTRAINED to the chosen archetype template's capabilities, and decompose classification.coreLoop into 3-5 PLAYABLE milestones (default 3): M1 = the core loop plays at all; the final milestone includes a win and/or lose end-state. For each milestone write acceptance criteria + executable runtime assertions (Given setup -> When input -> Then observe+expect) over the live game object window.__GAME__, 1:1 with the criteria, asserting OBSERVABLE behavior never implementation. Respect classification.scopeCut as a hard boundary; never invent a capability the template lacks; never cut the juice.
 
 Write exactly two files under ${PROJECT}/spec/, valid against packages/skills/write-gdd/gdd.schema.json: gdd.json and PLAN.md. Then return the gdd.json object as your structured result and stop.`,
     contract({ artifacts: ['spec/gdd.json', 'spec/PLAN.md'], owns: ['spec/**'] })),
@@ -321,7 +321,7 @@ const BLUEPRINT_SCHEMA = {
     referenceSolution: { type: 'object', additionalProperties: true, description: 'The proven winning action-sequence that engages the threat — VERIFY-2 replays it.' },
     acceptanceCriteria: { type: 'array', items: { type: 'object', additionalProperties: true }, description: 'Given/When/Then over __GAME__ — VERIFY-2 checks these from known preconditions.' },
     declaredRanges: { type: 'object', additionalProperties: true, description: 'Per-tunable/coordinate [min,max] perturbation envelope — VERIFY-2 permutes WITHIN these; every endpoint keeps the design winnable + the threat on path.' },
-    milestones: { type: 'array', minItems: 2, maxItems: 5, items: { type: 'object', additionalProperties: true }, description: 'Carried from the gdd, hardened against the concrete numbers; drives the W4/VERIFY-2 fan-out.' },
+    milestones: { type: 'array', minItems: 3, maxItems: 5, items: { type: 'object', additionalProperties: true }, description: 'Carried from the gdd, hardened against the concrete numbers; drives the W4/VERIFY-2 fan-out.' },
     assetList: { type: 'array' },
   },
 }

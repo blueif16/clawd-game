@@ -150,9 +150,9 @@
     },
     "milestones": {
       "type": "array",
-      "minItems": 2,
+      "minItems": 3,
       "maxItems": 5,
-      "description": "The spine: 2-5 PLAYABLE vertical slices (default 3), in build order. INVARIANTS: milestones[0] (M1) = the core loop playable ('it plays at all'); the LAST milestone includes an end-state (win and/or lose). Each is a runnable checkpoint with acceptance criteria + executable runtime assertions. Sized to the post-scope-cut design; overflow goes back to scope-cut, the list never exceeds 5.",
+      "description": "The spine: 3-5 PLAYABLE vertical slices (default 3, never fewer than 3 — every game exercises the reused verify harness across ≥3 stages), in build order. INVARIANTS: milestones[0] (M1) = the core loop playable ('it plays at all'); the LAST milestone includes an end-state (win and/or lose). Each is a runnable checkpoint with acceptance criteria + executable runtime assertions. Sized to the post-scope-cut design; overflow goes back to scope-cut, the list never exceeds 5.",
       "items": {
         "type": "object",
         "additionalProperties": false,

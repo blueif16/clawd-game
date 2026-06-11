@@ -1,6 +1,6 @@
 ---
 name: write-gdd
-description: "W1 SPEC (Designer, second node). Turn spec/classification.json + the original prompt + the chosen template's capabilities into the slim Game Design Doc and the milestone plan. Fills a template-constrained GDD (entities, mechanics, controls, win/lose, asset-list) and decomposes the core loop into 2-5 PLAYABLE milestones, each carrying acceptance criteria + executable runtime assertions W5 runs headless against the live game object. Writes spec/gdd.json + spec/PLAN.md."
+description: "W1 SPEC (Designer, second node). Turn spec/classification.json + the original prompt + the chosen template's capabilities into the slim Game Design Doc and the milestone plan. Fills a template-constrained GDD (entities, mechanics, controls, win/lose, asset-list) and decomposes the core loop into 3-5 PLAYABLE milestones, each carrying acceptance criteria + executable runtime assertions W5 runs headless against the live game object. Writes spec/gdd.json + spec/PLAN.md."
 version: 1.0.0
 node: W1
 role: Designer
@@ -26,7 +26,7 @@ Your job has exactly four parts:
 1. **Absorb** `classification.json` — the archetype, core loop, scope-cut are your hard inputs.
 2. **Fill the slim GDD** — entities, mechanics, controls, win/lose, asset-list — every field
    **constrained to what the chosen template provides**, and nothing the scope-cut forbids.
-3. **Decompose the core loop into 2-5 PLAYABLE milestones** (default 3) — M1 = the loop plays
+3. **Decompose the core loop into 3-5 PLAYABLE milestones** (default 3) — M1 = the loop plays
    at all; the final milestone has an end-state.
 4. **Author each milestone's acceptance criteria + executable runtime assertions** — checkable
    predicates over observable game state that W5 will run headless.
@@ -197,7 +197,7 @@ _([repo] generate-gdd "every section maps to a tool input or code file"; ForgeDN
 
 ---
 
-## 4. DECOMPOSE INTO 2-5 PLAYABLE MILESTONES (default 3)
+## 4. DECOMPOSE INTO 3-5 PLAYABLE MILESTONES (default 3)
 
 A milestone is **a PLAYABLE vertical slice with a verify gate** — at the end of it the game
 runs and the player can do something meaningful. It is an **outcome**, NOT an internal task.
@@ -211,8 +211,12 @@ feature, not every system"; [Y] Peter Yang "the right playable experience each t
 1. **M1 = the core loop plays at all** — the player appears, responds to input, and the core
    verb works (it renders + moves). This is the "it plays" gate. _([Y] Chong-U "first get basic
    movement and a single character in — the gym level".)_
-2. The **FINAL milestone includes an end-state** — win and/or lose; the game can finish.
-3. **Bounded 2-5, default 3.** Floor 2 = loop + goal (never one-shot). Ceiling 5 = the
+2. The **FINAL milestone includes a REACHABLE end-state** — a win the player can actually reach
+   (the win condition, once met, makes the game END: `status` → `won`, replayed by VERIFY-2's
+   completability gate) and/or a lose; never a design where you meet the win condition but the game
+   never finishes. _(2026-06-11 frog1: the human collected the reward and the game wouldn't end.)_
+3. **Bounded 3-5, default 3.** Floor 3 = a core-loop slice + a risk/challenge slice + an end-state
+   slice (so every game exercises the reused verify harness across ≥3 stages); never fewer. Ceiling 5 = the
    scope-control: more than 5 slices ⇒ cut back, don't grow.
 4. Each milestone carries **its own acceptance criteria + runtime assertions** (§5).
 5. Milestones are in **build order** (`M1`, `M2`, …); each builds on the last.
@@ -465,7 +469,7 @@ This node is a single `agent()` call with a forced-JSON output matching `gdd.sch
 result-dependent branching the extractor can't see. The **milestone list is a discovered-once
 list the pipeline fans out over with a static default of 3**: an extractor that can't see the
 real list still gets a sane 3-milestone shape (M1 loop · M2 system · M3 end-state). Keep the
-list bounded 2-5 (schema-enforced) so the extractor records clean, finite lanes — this is the
+list bounded 3-5 (schema-enforced) so the extractor records clean, finite lanes — this is the
 well-supported "scout the work-list, then pipeline over it" pattern, not open-ended fan-out
 (pipeline §7). The asset-slot list (`assetList[]`) is the second discovered-once list (W3 fans
 over it). Temperature can be moderate (design wants some creativity) but the schema + the
