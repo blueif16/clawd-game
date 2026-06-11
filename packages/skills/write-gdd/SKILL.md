@@ -311,6 +311,16 @@ Write **exactly two files** (relative to the project dir). Create `spec/` if nee
 The slim GDD + milestone plan. Required top-level: `meta`, `entities`, `mechanics`, `controls`,
 `winCondition`, `loseCondition`, `assetList`, `milestones`. Optional: `subMode`, `config`.
 
+**STRICT JSON ONLY (RFC 8259) — the file on disk, not just your returned object.** `gdd.json` is
+machine-parsed downstream (VERIFY-2 strict-parses it, and the assertion oracle LIVES in it), so it
+must `JSON.parse` cleanly: **NO comments** (`//` or `/* … */`), no trailing commas, no JS literals
+(`undefined`/`NaN`/`Infinity`), no unquoted keys, no single quotes. The model's instinct to inline
+an "assuming X / uncertain Y / why this number" note **as a comment** is the trap — a comment makes
+the artifact un-parseable even though the structure looks right. Any provenance/assumption/uncertainty
+note MUST go into a **JSON string value** — append it to the relevant `describe`, or add a string
+`_note` field — or into `PLAN.md` prose, **NEVER as an inline comment**. (Self-check: the bytes you
+write must pass `JSON.parse`, not merely the object you reasoned about — they can diverge.)
+
 ### B) `spec/PLAN.md` — the human-readable milestone checklist (kept updated downstream)
 _([repo] godogen/CCGS PLAN + state-file convention.)_ Shape:
 ```markdown
