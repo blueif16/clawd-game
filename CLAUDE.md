@@ -1,27 +1,29 @@
 # game-omni — project guide
 
 **What this is:** an AI **game-generation engine** — one prompt → a verified, playable Phaser 2D web game in
-one pass. It is a **workflow that orchestrates a skill system**: six nodes, each loading one evidence-grounded
+one pass. It is a **workflow that orchestrates a skill system**: seven nodes, each loading one evidence-grounded
 skill, coordinating ONLY through on-disk files (the filesystem is the contract). The single source of truth is
 `.claude/workflows/game-omni.js`; it is **Pi-portable** (runs cheaply on pi via `pi-runner/`).
 
 ## The pipeline (what each step does)
-`W0 → W1 → W2 → W3 → (per milestone: W4 → W5)` — see `.agents/skill-system-map.md` for the full wiring.
+`W0 → W1 → VERIFY-1 → W2 → W3 → (per milestone: W4 → VERIFY-2)` — **separation of powers**: a DESIGN gate before
+code, a QA gate after. See `.agents/skill-system-map.md` for the full wiring.
 
 | Node | Skill | Does |
 |---|---|---|
 | **W0 Classify** | `packages/skills/classify-game/` | Route the prompt to a physics-first archetype + one-line core loop + explicit **scope-cut**. → `spec/classification.json` |
-| **W1 Spec** | `packages/skills/write-gdd/` | Slim GDD + **2–5 playable milestones**, each with executable runtime assertions over `window.__GAME__`. → `spec/gdd.json`, `spec/PLAN.md` |
-| **W2 Scaffold** | `packages/skills/scaffold/` | Copy `templates/core/` + overlay the archetype module → empty building project + `index.json` + `STRUCTURE.md`; expose `window.__GAME__`. |
+| **W1 Spec** | `packages/skills/write-gdd/` | Slim GDD + **2–5 playable milestones**, each with executable runtime assertions over `window.__GAME__` (the design THESIS). → `spec/gdd.json`, `spec/PLAN.md` |
+| **VERIFY-1 Design** | `packages/skills/verify-design/` | **Pre-code design gate (static):** judge + HARDEN the thesis into a frozen, winnable `blueprint.json` (rubric + kinematic feasibility + threat-on-path + `referenceSolution` + `declaredRanges`); verdict `DESIGN_PASSED/FAILED`. → `spec/blueprint.json`, `spec/DESIGN_REVIEW.md` |
+| **W2 Scaffold** | `packages/skills/scaffold/` | Copy `templates/core/` + overlay the archetype module → empty building project + `index.json` + `STRUCTURE.md`; merge the **complete** `blueprint.config`; expose `window.__GAME__`. |
 | **W3 Assets** | `packages/skills/assets/` | Fill `public/assets/` + `ASSETS.md` from `index.json` (placeholder-first; gemini toggle). |
-| **W4 Implement** | `packages/skills/implement-milestone/` | Implement each milestone, wiring template juice; populate `window.__GAME__` for real; build green. → `src/**`, `MEMORY.md` |
-| **W5 Verify+Fix** | `packages/skills/verify/` | Run `packages/verify/` headless → assert vs `window.__GAME__` → `VALIDATION_PASSED/FAILED`; bounded ≤3 self-fix. → `verify/report.json` |
+| **W4 Execute** | `packages/skills/implement-milestone/` | Build each milestone of the frozen `blueprint.json` **VERBATIM** (zero design latitude); populate `window.__GAME__` for real; build green; **HALT+escalate on a missing number, never invent**. → `src/**`, `MEMORY.md` |
+| **VERIFY-2 QA** | `packages/skills/verify/` | Run `packages/verify/` headless six gates (fidelity · completability · invariants · **isomorphic perturbation**) vs `window.__GAME__` → `VALIDATION_PASSED/FAILED`; bounded ≤3 self-fix; impl-fidelity, NOT gameness. → `verify/report.M<id>.json` |
 
 ## How to run
 - **On Claude:** invoke the `game-omni` Workflow with `args.prompt` (+ optional `args.projectDir`, default `out/game`).
 - **On Pi (cheap):** `node pi-runner/run.mjs --run <id> --arg prompt="…" --arg projectDir=out/game --debug`
   (background). Provider `cp` resolves from pi's native `~/.pi/agent/models.json`; status → `out/<id>/run-status.json`.
-- **Sanity-check the DAG (free):** `node pi-runner/extract.mjs` → 10 stages.
+- **Sanity-check the DAG (free):** `node pi-runner/extract.mjs` → 11 stages.
 
 ## Skill-system stewardship (Hermes — this is live)
 We continuously evolve this skill system at dev speed. Treat any flaw, recurring finding, or user feedback on a

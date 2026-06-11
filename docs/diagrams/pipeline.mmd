@@ -1,33 +1,46 @@
-%% game-omni pipeline — the runtime spine W0 → W1 → W2 → W3 → (per milestone: W4 → W5)
-%% Edge labels = the on-disk artifacts that are the ONLY coordination channel
-%% (the filesystem is the contract). Node fill = role.
+%% game-omni pipeline — the runtime spine
+%%   W0 → W1 → VERIFY-1 → W2 → W3 → (per milestone: W4 Execute → VERIFY-2)
+%% Separation of powers (2026-06-10 redesign): a DESIGN gate BEFORE code (VERIFY-1, static)
+%% and a QA gate AFTER (VERIFY-2). VERIFY-1 freezes a winnable spec/blueprint.json; W4 builds it
+%% VERBATIM (zero design latitude); VERIFY-2 checks IMPLEMENTATION FIDELITY, never gameness.
+%% Edge labels = the on-disk artifacts that are the ONLY coordination channel (the filesystem is
+%% the contract). Node fill = role. Dashed edges = failure feedback (route upstream, never invent).
 flowchart TD
   IN(["args.prompt + args.projectDir"]):::io
 
   W0["<b>W0 · Classify</b><br/><i>Designer — classify-game</i><br/>physics-first archetype<br/>+ core loop + scope-cut"]:::designer
-  W1["<b>W1 · Spec</b><br/><i>Designer — write-gdd</i><br/>slim GDD + 2–5 milestones,<br/>each with runtime assertions"]:::designer
+  W1["<b>W1 · Spec</b><br/><i>Designer — write-gdd</i><br/>slim GDD + 2–5 milestones,<br/>each with runtime assertions<br/>(the design THESIS)"]:::designer
+  V1["<b>VERIFY-1 · Design</b><br/><i>Design Critic — verify-design</i><br/>STATIC, pre-code: judge + HARDEN<br/>→ frozen winnable blueprint<br/>(rubric · kinematic feasibility ·<br/>threat-on-path · declaredRanges)"]:::critic
   W2["<b>W2 · Scaffold</b><br/><i>Coder — scaffold</i><br/>copy template → empty green<br/>build + expose __GAME__ hook"]:::coder
   W3["<b>W3 · Assets</b><br/><i>Artist — assets</i><br/>fill asset slots<br/>(placeholder-first)"]:::artist
 
-  subgraph LOOP ["per milestone M1..Mn — SEQUENTIAL (each fully done before the next; W5 writes src/**)"]
+  subgraph LOOP ["per milestone M1..Mn — SEQUENTIAL (each fully done before the next; VERIFY-2 writes src/**)"]
     direction TB
-    W4["<b>W4 · Implement</b><br/><i>Coder — implement-milestone</i><br/>build slice green;<br/>populate __GAME__ for real"]:::coder
-    W5["<b>W5 · Verify + Fix</b><br/><i>Playtester — verify</i><br/>headless assert vs __GAME__"]:::tester
-    W4 -->|"src/** · ticks STRUCTURE.md · MEMORY.md"| W5
-    W5 -->|"VALIDATION_FAILED → ≤3 self-fix (edit src/**)"| W5
-    W5 -->|"next milestone"| W4
+    W4["<b>W4 · Execute</b><br/><i>Executor — implement-milestone</i><br/>build the blueprint VERBATIM<br/>(zero design latitude);<br/>populate __GAME__ for real"]:::coder
+    V2["<b>VERIFY-2 · QA</b><br/><i>Playtester — verify</i><br/>impl fidelity, NOT gameness:<br/>fidelity · completability ·<br/>invariants · ISOMORPHIC PERTURBATION"]:::tester
+    W4 -->|"src/** · ticks STRUCTURE.md · MEMORY.md"| V2
+    V2 -->|"VALIDATION_FAILED → ≤3 self-fix (impl bug → edit src/**)"| V2
+    V2 -->|"next milestone"| W4
   end
 
   OUT(["status: game-verified | incomplete"]):::io
 
   IN -->|"args.prompt"| W0
   W0 -->|"spec/classification.json"| W1
-  W1 -->|"spec/gdd.json + spec/PLAN.md"| W2
+  W1 -->|"spec/gdd.json + spec/PLAN.md"| V1
+  V1 -->|"spec/blueprint.json (FROZEN) + spec/DESIGN_REVIEW.md"| W2
   W2 -->|"STRUCTURE.md · index.json · window.__GAME__"| W3
   W3 -->|"public/assets/* · ASSETS.md · index.json"| W4
-  LOOP ==>|"all milestones VALIDATION_PASSED → verify/report.json"| OUT
+  LOOP ==>|"all milestones VALIDATION_PASSED → verify/report.M&lt;id&gt;.json"| OUT
+
+  V1 -.->|"DESIGN_FAILED → re-spec"| W1
+  V2 -.->|"design escalation → escalations.M&lt;id&gt;.json"| V1
+
+  HALT(["W4 HALT: blueprint underspecified → status: failed"]):::io
+  W4 -.->|"missing number → escalate, NEVER invent"| HALT
 
   classDef designer fill:#dbeafe,stroke:#2563eb,color:#0b2a66;
+  classDef critic fill:#fef3c7,stroke:#d97706,color:#7c2d12;
   classDef coder fill:#dcfce7,stroke:#16a34a,color:#064e1f;
   classDef artist fill:#fae8ff,stroke:#a21caf,color:#581c87;
   classDef tester fill:#fee2e2,stroke:#dc2626,color:#7f1d1d;

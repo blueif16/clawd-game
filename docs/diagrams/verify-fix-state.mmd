@@ -1,16 +1,34 @@
-%% W5 Verify+Fix — the bounded ≤3 self-fix state machine.
-%% The harness owns a persistent per-milestone counter (verify/.fixcycles-MID.json):
-%% once attempts exceed 3 it refuses BEFORE booting Chromium (cost-capped, idempotent).
+%% VERIFY-2 QA — the six-gate fidelity pass + bounded ≤3 self-fix state machine.
+%% VERIFY-2 checks IMPLEMENTATION FIDELITY to the frozen blueprint, never gameness (VERIFY-1 settled that).
+%% The harness owns a persistent per-milestone counter (verify/.fixcycles-MID.json): once attempts exceed 3
+%% it refuses BEFORE booting Chromium (cost-capped, idempotent). A failure is CLASSIFIED: an implementation
+%% bug → edit src/** only; a genuine DESIGN problem → escalate to VERIFY-1 (never fixed here).
 stateDiagram-v2
   [*] --> CheckBound : run verify-milestone PROJECT MID
 
   state "Boot and serve — build · headless Chromium (swiftshader)" as Boot
   state "Advance title gate — focus → Enter/Space/click" as AdvanceTitle
   state "Wait for window.\_\_GAME\_\_.ready" as WaitReady
-  state "Run assertions — setup → input → observe vs expect" as RunAssertions
-  state "VALIDATION_PASSED — write report.json, reset counter" as Passed
+
+  state "SIX GATES (aggregate)" as Gates {
+    state "1 · build-health — boots, no console errors, canvas not blank" as G1
+    state "2 · user-flow fidelity — Given/When/Then from KNOWN preconditions" as G2
+    state "3 · completability — replay referenceSolution → status:won" as G3
+    state "4 · invariants — monotonicity · bounds · no soft-lock · status-legality" as G4
+    state "5 · ISOMORPHIC PERTURBATION — permute within declaredRanges; faithful build is invariant" as G5
+    state "6 · verdict self-guard" as G6
+    G1 --> G2
+    G2 --> G3
+    G3 --> G4
+    G4 --> G5
+    G5 --> G6
+  }
+
+  state "VALIDATION_PASSED — write report.MID.json, reset counter" as Passed
   state "VALIDATION_FAILED" as Failed
-  state "Self-fix (root cause) — edit src/** ONLY, npm run build" as SelfFix
+  state "Classify the failure" as Classify
+  state "Self-fix (impl bug: build ≠ blueprint) — edit src/** ONLY, npm run build" as SelfFix
+  state "Design escalation — write escalations.MID.json → routes to VERIFY-1" as Escalate
   state "Honest VALIDATION_FAILED — oracle immutable, correct output" as StopHonest
   state "Bounded refusal — returns BEFORE booting Chromium" as BoundExceeded
 
@@ -18,12 +36,15 @@ stateDiagram-v2
   CheckBound --> Boot : within bound
   Boot --> AdvanceTitle
   AdvanceTitle --> WaitReady
-  WaitReady --> RunAssertions : ready
-  RunAssertions --> Passed : all pass and booted clean
-  RunAssertions --> Failed : any fail / missing marker
+  WaitReady --> Gates : ready
+  Gates --> Passed : all six gates pass
+  Gates --> Failed : any gate fails / diverges / missing marker
+  Failed --> Classify
+  Classify --> SelfFix : implementation bug AND cycles under 3
+  Classify --> Escalate : genuine DESIGN problem (blueprint wrong even when built faithfully)
+  Classify --> StopHonest : 3 cycles OR repeated signature (stall)
+  SelfFix --> CheckBound : re-run ALL gates incl. perturbation
   Passed --> [*]
-  Failed --> SelfFix : cycles under 3 and NEW failure signature
-  Failed --> StopHonest : 3 cycles OR repeated signature (stall)
-  SelfFix --> CheckBound : re-run harness
+  Escalate --> [*]
   StopHonest --> [*]
   BoundExceeded --> [*]

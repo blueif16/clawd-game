@@ -1,31 +1,47 @@
-%% The load-bearing cross-node contract: window.__GAME__
-%% W1 drafts assertions over it → W2 finalizes + exposes the accessor →
-%% W4 populates it from REAL state → W5 reads it to assert. The oracle is immutable.
+%% The two load-bearing cross-node contracts: spec/blueprint.json + window.__GAME__
+%% W1 DRAFTS assertions over the hook → VERIFY-1 HARDENS the design into a FROZEN blueprint
+%% (Given/When/Then acceptanceCriteria + referenceSolution + declaredRanges) → W2 finalizes +
+%% exposes the accessor → W4 POPULATES it from REAL state → VERIFY-2 READS it to assert FIDELITY
+%% (and perturbs within declaredRanges). Both oracles — gdd.json AND blueprint.json — are immutable.
 sequenceDiagram
   autonumber
   participant W1 as W1 · Spec (Designer)
+  participant V1 as VERIFY-1 · Design (Critic)
+  participant BP as spec/blueprint.json (FROZEN oracle)
   participant W2 as W2 · Scaffold (Coder)
   participant H as window.__GAME__ hook
-  participant W4 as W4 · Implement (Coder)
-  participant W5 as W5 · Verify (Playtester)
+  participant W4 as W4 · Execute (Executor)
+  participant V2 as VERIFY-2 · QA (Playtester)
 
-  Note over W1,W5: The filesystem is the contract — nodes hand off ONLY via on-disk artifacts
+  Note over W1,V2: The filesystem is the contract — nodes hand off ONLY via on-disk artifacts
 
   W1->>H: DRAFT assertions over the hook (observe player.y / score / status …)
-  Note right of W1: writes spec/gdd.json — the IMMUTABLE oracle
+  Note right of W1: writes spec/gdd.json — the design THESIS (immutable provenance)
 
-  W2->>H: FINALIZE canonical accessor (superset of W1 draft) and template EXPOSES it
+  W1->>V1: spec/gdd.json + spec/PLAN.md
+  V1->>BP: HARDEN + FREEZE — complete config · concrete layout (coords/routes/timings)
+  Note right of V1: rubric + kinematic feasibility math + threat-on-reward-path
+  V1->>BP: author referenceSolution (proof it is winnable) + Given/When/Then acceptanceCriteria + declaredRanges
+  Note right of V1: blueprint.json is now the SINGLE source of truth for W2/W3/W4/VERIFY-2
+
+  V1->>H: UPGRADE W1's drafts → acceptanceCriteria over the hook
+  W2->>H: FINALIZE canonical accessor (superset) and template EXPOSES it
   Note right of W2: template-contract.md §3: ready/status/scene/player/score/entities + snapshot()
 
-  W4->>H: POPULATE from REAL state (score via registry · status set at the real win/lose point)
-  Note right of W4: anti-reward-hack — implement the mechanic so the observable is genuinely true
+  W4->>BP: read layout/config/coupling/referenceSolution VERBATIM (zero design latitude)
+  W4->>H: POPULATE from REAL state (score via registry · status at the real win/lose/respawn point)
+  Note right of W4: anti-contortion — NEVER fake __GAME__, tune to the driver radius, or disable a threat
 
-  W5->>H: READ to assert (setup → input → observe vs expect)
-  H-->>W5: live values
+  V2->>BP: read acceptanceCriteria · referenceSolution · declaredRanges
+  V2->>H: READ to assert FIDELITY (Given/When/Then from KNOWN preconditions)
+  H-->>V2: live values
+  V2->>H: ISOMORPHIC PERTURBATION — re-run permuted WITHIN declaredRanges
 
-  alt every assertion passes
-    W5->>W5: emit VALIDATION_PASSED
-  else any assertion fails
-    W5->>W4: bounded ≤3 self-fix — edit src/** GAME CODE only
-    Note over W4,W5: NEVER edit gdd / assertions / hook / harness — the oracle stays immutable
+  alt build is a FAITHFUL, invariant realization
+    V2->>V2: emit VALIDATION_PASSED
+  else implementation bug (build ≠ blueprint / diverges under perturbation)
+    V2->>W4: bounded ≤3 self-fix — edit src/** GAME CODE only
+    Note over W4,V2: NEVER edit gdd / blueprint / referenceSolution / hook / harness — the oracle stays immutable
+  else genuine DESIGN problem (blueprint unwinnable even when built faithfully)
+    V2->>V1: escalate — write escalations.M<id>.json (routes to VERIFY-1, NOT the executor)
   end
