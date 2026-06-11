@@ -76,6 +76,15 @@ export interface AssertionResult {
   status: 'pass' | 'fail' | 'error';
   message?: string;
   screenshot?: string;
+  /**
+   * True when this assertion applied a FRESH precondition (`setup.scene` restart
+   * or a `setup.state` patch) — i.e. it established a new GIVEN independent of the
+   * prior assertion. The caller (harness fidelity loop) uses this to open a new
+   * trace SEGMENT on the InvariantSampler so the consecutive-pair invariants
+   * (status-legality, monotonic, no-softlock run) do not compare across the
+   * boundary between two independent probes (F2).
+   */
+  appliedPrecondition: boolean;
 }
 
 const SETTLE_CEILING_MS = 2000;
@@ -113,8 +122,9 @@ export async function focusCanvas(page: Page): Promise<void> {
 async function applySetup(
   page: Page,
   setup: GddAssertion['setup'],
-): Promise<void> {
-  if (!setup) return;
+): Promise<boolean> {
+  if (!setup) return false;
+  let appliedPrecondition = false;
 
   if (setup.scene) {
     // Drive to the requested scene. The template exposes commands.reset() to
@@ -131,6 +141,7 @@ async function applySetup(
         })
         .catch(() => {});
       await focusCanvas(page);
+      appliedPrecondition = true;
     }
   }
 
@@ -139,7 +150,13 @@ async function applySetup(
       (patch) => (window as any).__GAME__?.commands?.setState(patch),
       setup.state,
     );
+    appliedPrecondition = true;
   }
+
+  // A fresh precondition (scene-restart or a state patch) establishes a NEW GIVEN
+  // for this probe → the caller starts a new trace SEGMENT (F2): the prior
+  // probe's terminal status / score must not be compared against this one's.
+  return appliedPrecondition;
 }
 
 /**
@@ -205,15 +222,30 @@ export async function fireInput(
       return null;
     }
     case 'event': {
-      // Drive the REAL interaction the event names: fire the player's OWN
-      // documented controls toward the named target until the real interaction
-      // fires (target consumed / true overlap / the observed field already
-      // satisfied) OR a bounded step/time budget is exhausted. We NEVER setState
-      // the observed outcome — we drive input, not the verdict. If the target
-      // cannot be resolved at all, that is an honest authoring error (the event
-      // names an entity not in the gdd). If it resolves but the player can't
-      // reach it within budget, `driveEvent` returns OK anyway and the comparator
-      // reads the real (still-unwon) state and FAILS honestly — the
+      // RESERVED COMMAND-EVENTS (grammar §2.4): a small closed set of event
+      // targets names a sanctioned `commands.*` invocation, NOT an entity to
+      // navigate toward. `reset`/`respawn` → commands.reset() (template-contract
+      // §3). These are resolved BEFORE the entity-navigation fallback: there is
+      // no entity named 'reset', so without this the driver would treat it as an
+      // entity ref, find none, and NO-OP — a respawn assertion would never be
+      // driven (F3). It is a closed reserved set (not arbitrary command access),
+      // so it cannot fake an observed outcome — reset() is the sanctioned
+      // fresh-level command the harness already uses for setup.scene.
+      const cmd = reservedCommandEvent(input.target);
+      if (cmd) {
+        const driven = await driveCommandEvent(page, cmd);
+        if (!driven.ok) return driven.message ?? `command-event '${input.target ?? ''}' could not be driven`;
+        return null;
+      }
+      // Otherwise drive the REAL interaction the event names: fire the player's
+      // OWN documented controls toward the named target until the real
+      // interaction fires (target consumed / true overlap / the observed field
+      // already satisfied) OR a bounded step/time budget is exhausted. We NEVER
+      // setState the observed outcome — we drive input, not the verdict. If the
+      // target cannot be resolved at all, that is an honest authoring error (the
+      // event names an entity not in the gdd). If it resolves but the player
+      // can't reach it within budget, `driveEvent` returns OK anyway and the
+      // comparator reads the real (still-unwon) state and FAILS honestly — the
       // unwinnable-level signal, never an error-as-"unsupported".
       const driven = await driveEvent(page, input.target, ctx);
       if (!driven.ok) return driven.message ?? `event '${input.target ?? ''}' could not be driven`;
@@ -253,6 +285,51 @@ function resolveTargetRefs(ref: string, ctx: GddContext): string[] {
 function parseEventTargetRef(target: string): string {
   const m = target.match(/^overlap:\s*[a-z_]+\s*,\s*([a-z_]+)\s*$/i);
   return m ? m[1] : target;
+}
+
+/**
+ * The CLOSED set of reserved command-event targets (grammar §2.4): an `event`
+ * whose `target` names a sanctioned `commands.*` invocation rather than an entity
+ * to navigate toward. Generic / archetype-agnostic — `reset`/`respawn` map to the
+ * sanctioned `commands.reset()` (template-contract §3) that restarts the current
+ * level to a fresh playable state (the design's respawn-on-fail beat). It is a
+ * fixed reserved vocabulary, NOT arbitrary command access: reset() cannot fake an
+ * observed outcome (it is the same fresh-level command the harness already uses
+ * for `setup.scene`). Returns the command key or null (a normal entity event).
+ */
+type ReservedCommand = 'reset';
+function reservedCommandEvent(target: string | undefined): ReservedCommand | null {
+  if (!target) return null;
+  const t = target.trim().toLowerCase();
+  if (t === 'reset' || t === 'respawn') return 'reset';
+  return null;
+}
+
+/**
+ * Drive a reserved command-event via the sanctioned `__GAME__.commands.*` seam,
+ * then re-wait ready + re-focus (the level restart re-creates the scene). This is
+ * REAL behavior (it invokes the game's own sanctioned command), never a write of
+ * the observed field. Returns ok:false only when the command seam is absent (a
+ * real contract gap the comparator/agent should see honestly).
+ */
+async function driveCommandEvent(page: Page, cmd: ReservedCommand): Promise<DriveResult> {
+  await focusCanvas(page);
+  const present = await page
+    .evaluate(
+      (c) => typeof (window as any).__GAME__?.commands?.[c] === 'function',
+      cmd,
+    )
+    .catch(() => false);
+  if (!present) {
+    return { ok: false, message: `command-event '${cmd}': __GAME__.commands.${cmd}() not exposed` };
+  }
+  await page.evaluate((c) => (window as any).__GAME__?.commands?.[c]?.(), cmd).catch(() => {});
+  // The command restarts the level scene — wait for ready to re-latch, re-focus.
+  await page
+    .waitForFunction(() => (window as any).__GAME__?.ready === true, { timeout: 10000 })
+    .catch(() => {});
+  await focusCanvas(page);
+  return { ok: true };
 }
 
 /** A documented control mapped to a movement INTENT the driver can issue. */
@@ -490,13 +567,14 @@ export async function executeAssertion(
       observed: null,
       status: 'error',
       message: `assertion ${assertion.id} has no recognized comparator key in expect`,
+      appliedPrecondition: false, // failed before setup ran
     };
   }
   const { comparator, expected } = parsed;
   const relative = RELATIVE_COMPARATORS.has(comparator);
 
-  // 2.2 setup (GIVEN)
-  await applySetup(page, assertion.setup);
+  // 2.2 setup (GIVEN) — a fresh precondition opens a new trace segment (F2).
+  const appliedPrecondition = await applySetup(page, assertion.setup);
 
   // 2.3 BEFORE read (relative comparators only)
   let before: unknown;
@@ -516,6 +594,7 @@ export async function executeAssertion(
       observed: relative ? { before, after: null } : null,
       status: 'error',
       message: inputErr,
+      appliedPrecondition,
     };
   }
 
@@ -555,5 +634,6 @@ export async function executeAssertion(
     observed: relative ? { before, after } : after,
     status: cmp.status,
     ...(cmp.message ? { message: cmp.message } : {}),
+    appliedPrecondition,
   };
 }

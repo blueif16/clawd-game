@@ -52,7 +52,7 @@ Re-focus the canvas first (`await page.locator('canvas').focus()` — Phaser los
 | `keyPress` | `await page.keyboard.press(input.key)` | A single tap. `input.key` is a DOM key name (`'ArrowUp'`, `'Space'`); must appear in `gdd.controls[]`. |
 | `keyHold` | `await page.keyboard.down(input.key); await page.waitForTimeout(input.durationMs ?? 200); await page.keyboard.up(input.key)` | A timed hold. The `waitForTimeout` here is a **HOLD duration, not a readiness wait** (allowed). |
 | `click` | resolve `input.target` (an entity id) to a canvas position via `__GAME__.entities` lookup, then `await page.locator('canvas').click({ position: { x, y } })` | Canvas content has no DOM — click by COORDINATE relative to the canvas, never `getByRole`. If the entity can't be located, the assertion errors (recorded). |
-| `event` | trigger the REAL interaction the event names (`target:'overlap:player,coin'` → drive the player's OWN documented `controls[]` toward the target until the interaction fires for real); use a `commands`-sanctioned trigger ONLY if no natural input reaches it | **NEVER** `setState` the observed outcome directly. The event must happen for real. **The driver is GENERIC** (see §2.4.1): it resolves the target by gdd role, derives movement keys from `controls[]`, and drives both axes toward the goal in a bounded budget. If the target is unreachable within budget, the driver does NOT error — it lets the comparator read the real (still-unwon) state and **FAIL honestly** (the unwinnable-level signal). |
+| `event` | trigger the REAL interaction the event names (`target:'overlap:player,coin'` → drive the player's OWN documented `controls[]` toward the target until the interaction fires for real); use a `commands`-sanctioned trigger ONLY if no natural input reaches it. A **reserved command-event target** (`reset`/`respawn` — see §2.4.2) instead invokes a sanctioned `commands.*` directly. | **NEVER** `setState` the observed outcome directly. The event must happen for real. **The driver is GENERIC** (see §2.4.1): it resolves the target by gdd role, derives movement keys from `controls[]`, and drives both axes toward the goal in a bounded budget. If the target is unreachable within budget, the driver does NOT error — it lets the comparator read the real (still-unwon) state and **FAIL honestly** (the unwinnable-level signal). |
 | `none` / absent | (no input) | A pure at-scene-start observe. |
 
 #### 2.4.1 The generic `event` / win-path driver (`compile.ts:driveEvent`)
@@ -62,6 +62,18 @@ The `event` input drives the player's OWN documented controls toward the named t
 - **Drive both axes toward the goal, bounded.** Each step reads live `player.{x,y}` + the target's `{x,y}` off `__GAME__`, holds the documented key that REDUCES `|dx|` (continuous walk), and TAPS the up/down key when the target is meaningfully above/below (a jump is a discrete press). Bounded by a step + wall-clock budget (wait-on-state, never a blind sleep).
 - **Terminate on the REAL interaction.** The loop ends when the target entity is GONE (consumed/collected) OR true 2D overlap is reached; a brief one-time settle lets the engine's overlap/win callback latch before the AFTER read.
 - **Anti-reward-hack + honest failure.** The driver issues ONLY real key input and reads ONLY observable state to pick a direction — it **NEVER** writes `status`/the observed field. It returns an input-error ONLY when there is no player to drive. When the goal is unreachable within budget it returns OK anyway, so the comparator reads the real state and **FAILS** (never errors-as-"unsupported") — the unwinnable-level signal the Bucket-3 win-path assertion depends on.
+
+#### 2.4.2 Reserved command-events (`compile.ts:reservedCommandEvent` → `driveCommandEvent`)
+A **CLOSED, archetype-agnostic set** of `event` targets names a sanctioned `__GAME__.commands.*` invocation instead of an entity to navigate toward. These are resolved **BEFORE** the entity-navigation fallback (§2.4.1), so the driver never mis-treats them as an entity reference and no-ops:
+
+| `event.target` | resolves to | drives |
+|---|---|---|
+| `reset` , `respawn` | `__GAME__.commands.reset()` (template-contract §3) | restart the current level to a fresh playable state — the design's **respawn-on-fail / fresh-crossing** beat. After the call the harness re-waits `__GAME__.ready` and re-focuses the canvas. |
+
+Rules:
+- **Closed reserved vocabulary, not arbitrary command access.** Only the targets in the table above map to a command; everything else is a normal entity-navigation event. `reset()` is the SAME sanctioned fresh-level command `setup.scene` already uses (§2.2) — it **cannot fake an observed outcome** (it does not write `status`/`score`/the observed field), so it is anti-reward-hack-safe.
+- **Why this exists (F3).** A frozen respawn assertion (`{type:'event', target:'reset'}`, then observe `status === 'playing'`) was previously **un-drivable**: the generic driver treated `reset` as an entity ref, found none, and no-opped, so the respawn was never actually exercised. Mapping the reserved target to the sanctioned command makes the respawn a REAL driven interaction the comparator can judge honestly.
+- **Honest failure.** If `commands.reset` is not exposed (a real contract gap), the input errors honestly (`__GAME__.commands.reset() not exposed`) — it is never silently swallowed.
 
 ### 2.5 AFTER read + the within-window poll for relative timing
 - Default: `const after = await page.evaluate((expr) => __evalObserve(window.__GAME__, expr), observe);`

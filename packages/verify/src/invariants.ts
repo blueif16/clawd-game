@@ -54,6 +54,36 @@ const STATUS_FIELD = 'status';
 export class InvariantSampler {
   private samples: Sample[] = [];
   private lastSampleAt = 0;
+  /**
+   * Indices in `samples[]` at which a NEW TRACE SEGMENT begins. A segment
+   * boundary is created whenever a fresh precondition (an assertion `setup.state`/
+   * `setup.scene`, or the completability `resetLevel`) establishes a new GIVEN —
+   * i.e. the next sample is the start of an INDEPENDENT injected scenario, not a
+   * continuation of the prior drive. The CONSECUTIVE-pair invariants
+   * (status-legality, monotonic) must NOT compare ACROSS such a boundary (probe
+   * A1 ending 'won' followed by probe A2 ending 'playing' are two independent
+   * scenarios — that pair is not an illegal transition); WITHIN a single
+   * continuous drive every transition still fully applies. The no-softlock
+   * zero-delta RUN also resets at a boundary (a fresh precondition is not
+   * continuous input). Per-sample checks (bounds) are unaffected. _(F2:
+   * verdict-correctness — kills a false status-legality / monotonic trip across
+   * independent probes; a real illegal edge inside one drive still fails.)_
+   */
+  private segmentStarts = new Set<number>();
+  /** When true, the NEXT pushed sample opens a new trace segment (set by mark). */
+  private pendingSegmentBoundary = false;
+
+  /**
+   * Mark a trace-segment boundary: the NEXT sample pushed begins a new,
+   * independent segment (a fresh precondition / level reset was just applied).
+   * Idempotent until the next sample lands. Generic across archetypes — it is the
+   * caller (harness/completability) that knows a precondition was applied; the
+   * sampler only records WHERE the segment changed so the consecutive-pair checks
+   * skip that one straddling pair.
+   */
+  markSegmentBoundary(): void {
+    this.pendingSegmentBoundary = true;
+  }
 
   /** Take ONE sample now if the cadence has elapsed (cheap; safe to over-call). */
   async sample(page: Page, force = false): Promise<void> {
@@ -61,7 +91,15 @@ export class InvariantSampler {
     if (!force && now - this.lastSampleAt < SAMPLE_INTERVAL_MS) return;
     this.lastSampleAt = now;
     const snap = await readSnapshot(page);
-    if (snap) this.samples.push(snap);
+    if (snap) {
+      if (this.pendingSegmentBoundary) {
+        // This sample is the first of a new segment: record its index so the
+        // consecutive-pair checks skip the (prev → this) straddling pair.
+        this.segmentStarts.add(this.samples.length);
+        this.pendingSegmentBoundary = false;
+      }
+      this.samples.push(snap);
+    }
   }
 
   /** Number of accumulated samples (diagnostic). */
@@ -91,9 +129,12 @@ export class InvariantSampler {
 
   // ── monotonic (differential) ───────────────────────────────────────────────
   private checkMonotonic(): InvariantResult {
-    // score / moveCount / waveIndex must be non-decreasing across the trace;
-    // a single life is the whole trace here (a respawn resets position, not
-    // score). A drop is a real bug.
+    // score / moveCount / waveIndex must be non-decreasing WITHIN a trace
+    // segment (a single continuous drive). A respawn resets position, not score,
+    // so within one drive a drop is a real bug. But a FRESH PRECONDITION can
+    // legitimately reset the counter (probe A1 setState{score:3} then probe A2
+    // setState{score:1} is two independent scenarios, not a score-drop), so the
+    // baseline RESETS at each segment boundary — we never compare across it (F2).
     const nonDecreasing: Array<'score' | 'moveCount' | 'waveIndex'> = [
       'score',
       'moveCount',
@@ -101,15 +142,16 @@ export class InvariantSampler {
     ];
     for (const field of nonDecreasing) {
       let prev: number | undefined;
-      for (const s of this.samples) {
-        const v = numField(s, field);
+      for (let i = 0; i < this.samples.length; i += 1) {
+        if (this.segmentStarts.has(i)) prev = undefined; // new segment → reset baseline
+        const v = numField(this.samples[i], field);
         if (v === undefined) continue;
         if (prev !== undefined && v < prev) {
           return {
             name: `${field} never decreases`,
             kind: 'monotonic',
             held: false,
-            evidence: `${field} dropped ${prev}→${v} mid-trace`,
+            evidence: `${field} dropped ${prev}→${v} mid-trace (within one drive)`,
           };
         }
         prev = v;
@@ -174,10 +216,19 @@ export class InvariantSampler {
   private checkNoSoftlock(): InvariantResult {
     // Only meaningful if the caller drove continuous input through these samples.
     // We detect a long run of identical whole-state snapshots: the player neither
-    // moved nor changed any observable while input was being fired.
+    // moved nor changed any observable while input was being fired. A fresh
+    // precondition (segment boundary) is NOT continuous input, so the zero-delta
+    // run RESETS there — a soft-lock is a stall WITHIN one continuous drive (F2).
     let runStart = 0;
     let run = 1;
     for (let i = 1; i < this.samples.length; i += 1) {
+      if (this.segmentStarts.has(i)) {
+        // New segment — restart the run; never count a zero-delta pair that
+        // straddles a precondition boundary as a soft-lock.
+        run = 1;
+        runStart = i;
+        continue;
+      }
       if (sampleEqual(this.samples[i], this.samples[i - 1])) {
         run += 1;
         if (run >= SOFTLOCK_ZERO_DELTA_RUN) {
@@ -203,8 +254,17 @@ export class InvariantSampler {
   // ── status legality (transitions match a legal flow) ────────────────────────
   private checkStatusLegality(): InvariantResult {
     let prev: string | undefined;
-    for (const s of this.samples) {
-      const cur = strField(s, STATUS_FIELD);
+    for (let i = 0; i < this.samples.length; i += 1) {
+      // A fresh precondition starts a NEW TRACE SEGMENT: drop the carried `prev`
+      // so a terminal status from a PRIOR independent probe is never compared
+      // against the new probe's status (probe A1 ending 'won' then probe A2's
+      // injected 'playing' is NOT a won→playing edge — they are two independent
+      // injected scenarios). WITHIN one continuous drive every transition is
+      // STILL fully checked, so a genuine illegal edge (e.g. won→playing inside a
+      // single play, or a respawn-only design illegally leaving a terminal state
+      // mid-drive) still FAILS (F2).
+      if (this.segmentStarts.has(i)) prev = undefined;
+      const cur = strField(this.samples[i], STATUS_FIELD);
       if (cur === undefined) continue;
       if (prev !== undefined && prev !== cur) {
         // Legal transitions: booting→playing, playing→won, playing→lost,
@@ -215,7 +275,7 @@ export class InvariantSampler {
             name: 'status transitions are legal',
             kind: 'status-legality',
             held: false,
-            evidence: `illegal status transition ${prev}→${cur}`,
+            evidence: `illegal status transition ${prev}→${cur} (within one drive)`,
           };
         }
       }

@@ -71,7 +71,12 @@ export async function runCompletability(
   const interim: Array<Record<string, unknown>> = [];
 
   // Reset to a fresh playable level so the replay starts from the real spawn.
+  // This is a fresh precondition (level restart) → the replay is a NEW trace
+  // SEGMENT: the prior fidelity probes' terminal status must NOT be compared
+  // against the replay's fresh 'playing' (F2). WITHIN the replay (one continuous
+  // drive) every status/monotonic transition is still fully checked.
   await resetLevel(page);
+  if (sampler) sampler.markSegmentBoundary();
 
   for (let i = 0; i < reference.steps.length; i += 1) {
     const step = reference.steps[i];

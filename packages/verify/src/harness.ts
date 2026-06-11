@@ -615,6 +615,14 @@ export async function runMilestoneVerify2(opts: RunMilestoneV2Opts): Promise<Run
 
     for (const assertion of assertions) {
       const result = await executeAssertion(state.page, assertion, ctx);
+      // F2: an assertion that applied a FRESH precondition (setup.scene restart /
+      // setup.state patch) establishes a new, INDEPENDENT injected scenario — open
+      // a new trace SEGMENT so the consecutive-pair invariants (status-legality,
+      // monotonic, no-softlock run) do NOT compare this probe's status/score
+      // against the prior probe's (e.g. probe A1 ending 'won' then probe A2's
+      // injected 'playing' is not a won→playing edge). Mark BEFORE the post-drive
+      // sample so that sample is recorded as the start of the new segment.
+      if (result.appliedPrecondition) sampler.markSegmentBoundary();
       await sampler.sample(state.page, true);
       resultsForSchema.push(result);
       originalVerdicts.push({
@@ -647,13 +655,38 @@ export async function runMilestoneVerify2(opts: RunMilestoneV2Opts): Promise<Run
     const fidelityFailures = fidelity.filter((f) => f.status !== 'pass');
 
     // ── GATE 3: COMPLETABILITY (replay the reference intended solution) ──────
-    const completability: CompletabilityResult = await runCompletability(
-      state.page,
-      blueprint.referenceSolution,
-      ctx,
-      winObservable,
-      sampler,
-    );
+    // SCOPE (verdict-correctness, SKILL §11/§12): blueprint.referenceSolution is
+    // the WHOLE-GAME proof-of-winnability (a single top-level sequence that
+    // collects every reward, engages every threat, and reaches the win). By the
+    // frozen milestone decomposition, an ONBOARDING / intermediate milestone
+    // intentionally does NOT yet contain the entities the full win path needs
+    // (e.g. the M1 onboarding slice has no collectibles/threat/goal — those are
+    // later milestones' deliverables, built verbatim with zero invention). So the
+    // win-replay is in scope ONLY for the TERMINAL milestone — the one that
+    // delivers the end-to-end win. Running it against a partial build would ask an
+    // earlier slice to satisfy a sequence whose required entities don't exist yet
+    // — a HARNESS scoping error (a buggy test false-blocking a faithful build),
+    // NOT a build failure. This is archetype/game-AGNOSTIC: every game's
+    // non-terminal milestones lack the full win path by construction.
+    const completabilityInScope = isTerminalMilestone(blueprint, milestoneId);
+    const completability: CompletabilityResult = completabilityInScope
+      ? await runCompletability(
+          state.page,
+          blueprint.referenceSolution,
+          ctx,
+          winObservable,
+          sampler,
+        )
+      : {
+          ran: false,
+          reachedWin: false,
+          interimObservables: [],
+          status: 'pass',
+          message:
+            `completability out of scope for non-terminal milestone '${milestoneId}'` +
+            ` — the whole-game referenceSolution win-path is replayed on the terminal milestone` +
+            ` (its required entities are later milestones' deliverables)`,
+        };
 
     // ── GATE 4: INVARIANTS (evaluate the sampled trace) ─────────────────────
     const invariants: InvariantResult[] = sampler.evaluate(blueprint.layout);
@@ -727,7 +760,8 @@ export async function runMilestoneVerify2(opts: RunMilestoneV2Opts): Promise<Run
       markerLine = formatDesignEscalation(escalation.note);
       summary = `design escalation — ${escalation.note}`;
     } else if (passed) {
-      const totalChecks = fidelity.length + 1 /*completability*/ + invariants.length;
+      const totalChecks =
+        fidelity.length + (completability.ran ? 1 : 0) + invariants.length;
       markerLine = formatAggregatePassed(milestoneId, totalChecks);
       summary = `${milestoneId} all ${totalChecks} checks passed (fidelity + completability + invariants + perturbation)`;
     } else {
@@ -831,6 +865,25 @@ function mapAcceptanceToAssertions(
     r += 1;
   }
   return out;
+}
+
+/**
+ * Is `milestoneId` the TERMINAL milestone (the one that delivers the end-to-end
+ * win)? The completability gate (§4) replays the WHOLE-GAME referenceSolution,
+ * which is in scope only for the terminal milestone (verdict-correctness, SKILL
+ * §11/§12). The terminal milestone is the LAST entry in blueprint.milestones (the
+ * milestone spine is ordered onboarding → … → win, M1 < M2 < … < Mk); we resolve
+ * it by the maximal numeric id so the rule is robust to array ordering and holds
+ * for ANY game's decomposition. A single-milestone game is trivially terminal.
+ */
+function isTerminalMilestone(blueprint: Blueprint, milestoneId: string): boolean {
+  const ids = (blueprint.milestones ?? [])
+    .map((m) => m.id)
+    .filter((id) => /^M[1-9][0-9]*$/.test(id));
+  if (ids.length === 0) return true; // no spine to compare against → treat as terminal
+  const num = (id: string): number => parseInt(id.slice(1), 10);
+  const terminal = ids.reduce((a, b) => (num(b) > num(a) ? b : a));
+  return milestoneId === terminal;
 }
 
 /**
