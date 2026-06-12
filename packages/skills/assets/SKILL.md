@@ -182,7 +182,10 @@ exist. If you cannot write a PNG (no sharp, no other tool), leave `pending` and 
   color with a subtle inset border so tiles are visible when laid in a grid. POT helps WebGL wrap.
   _([E] Phaser non-POT only supports CLAMP wrap; tilesets often tile → prefer POT.)_
 - **`background`:** a full `width`×`height` (default `screenSize`, 1152×768) **opaque** PNG — a soft
-  vertical gradient or flat muted fill (NOT transparent — backgrounds fill the frame). NO label and
+  vertical gradient or flat muted fill (NOT transparent — backgrounds fill the frame). **FULLY opaque
+  across the ENTIRE canvas, INCLUDING effect regions** — bake glows/light-spills/auras as opaque color
+  blends toward the effect color, never via alpha: any transparent pixel in a background renders
+  in-game as a hole to the clear color. NO label and
   NO watermark — backgrounds carry no text at all; the key lives in ASSETS.md. _([repo] gameforge backgrounds = opaque `cover`.)_
 - **`audio`:** a short **valid WAV** — silence (~0.3 s) or a simple synth blip — so `load.audio(slot,
   path)` succeeds and the game never errors on a missing sound. Audio has a **guaranteed** fallback
@@ -325,6 +328,11 @@ ALWAYS IN FULL. Format (commit this shape; also schematized in `assets.schema.js
 ## Notes
 <failed/oversized generations + reason · degradation reason · pixel-snap applied · empty-slots case · anything in MEMORY.md>
 ```
+
+**Verify-then-claim:** an `ASSETS.md` row (or Notes line) may only assert a property — opacity,
+dims, format, frame tiling — that you actually VERIFIED against the on-disk bytes of the shipped
+file (read back the PNG header / alpha channel / sheet width before writing the row). Never assert
+from intent: a manifest claim the bytes contradict misleads every downstream reader.
 
 Also append a one-line note per quirk to `MEMORY.md` (degradation, failed slots, fallbacks) for W4/W5.
 
