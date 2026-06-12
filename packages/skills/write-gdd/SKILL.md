@@ -137,6 +137,18 @@ _([repo] generate-gdd "every section maps to a tool input or code file"; ForgeDN
   wins, how the player loses"; [repo] `packages/verify/src/invariants.ts isLegalStatusTransition` —
   'won'/'lost' terminal, immutable; 2026-06-11 frog1 escalation — a `catch->'lost'` + `respawn->'playing'`
   pair is the contradiction the harness forbids.)_
+- **`failModel` (the HUD-model twin of status-coherence).** The design picks EXACTLY ONE fail-model and
+  declares it as a machine-readable field `meta.failModel` ∈ {`"health"`, `"lives"`, `"respawn"`, `"none"`}
+  so the downstream HUD surfaces ONLY the resource the game actually drives: `"health"` ⇒ a depleting HP
+  pool the game decrements as a mechanic (set `config.maxHealth` > 1); `"lives"` ⇒ a finite life counter
+  that decrements on a fail and reaches a terminal `status:'lost'` at 0; `"respawn"` ⇒ infinite retries on
+  a distinct observable (player→spawn), NO health pool, NO lives, the only terminal state is the win;
+  `"none"` ⇒ a sandbox/no-fail toy. The fail-model MUST agree with `loseCondition.observable` (respawn ⇒
+  spawn-return + `status:'playing'`; lives ⇒ `lives` decrement; health ⇒ `player.health<=0`). Do NOT leave
+  `config.maxHealth` as inert tuning a HUD latches onto — an inherited `player.health` field is NOT a
+  health mechanic. Encode the RELATION "the HUD shows ⟺ a live game-driven resource under the chosen
+  fail-model," never a genre constant. _(2026-06-11 frog1 hud-healthbar: a respawn-only game shipped a
+  static `100/100` bar because `maxHealth` was inert config no node could read as "no health model.")_
 - **`config`** — tuning numbers (flat `key: number`), keys matching the archetype's config
   schema (§2). Optional but recommended.
 - **`assetList[]`** — the art/audio as slots: `{slot, type, description, +frames/width/height}`.

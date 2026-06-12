@@ -175,13 +175,14 @@ const GDD_SCHEMA = {
   properties: {
     meta: {
       type: 'object', additionalProperties: false,
-      required: ['title', 'archetype', 'coreLoop', 'coreVerb', 'artStyle'],
+      required: ['title', 'archetype', 'coreLoop', 'coreVerb', 'artStyle', 'failModel'],
       properties: {
         title: { type: 'string', minLength: 1 },
         archetype: { type: 'string', enum: ['platformer', 'top_down', 'grid_logic', 'tower_defense', 'ui_heavy'] },
         coreLoop: { type: 'string', minLength: 1 },
         coreVerb: { type: 'string', minLength: 1 },
         coreFantasy: { type: 'string' },
+        failModel: { type: 'string', enum: ['health', 'lives', 'respawn', 'none'] },
         artStyle: { type: 'string', minLength: 1, description: "Art note feeding W3; 'placeholder' is valid for v1." },
         physicsProfile: {
           type: 'object', additionalProperties: false,

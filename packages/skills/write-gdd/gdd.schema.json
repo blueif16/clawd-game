@@ -19,7 +19,7 @@
     "meta": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["title", "archetype", "coreLoop", "coreVerb", "artStyle"],
+      "required": ["title", "archetype", "coreLoop", "coreVerb", "artStyle", "failModel"],
       "description": "Game identity. archetype/coreLoop/coreVerb are carried verbatim from classification.json; title is derived by W1.",
       "properties": {
         "title": { "type": "string", "minLength": 1, "description": "Short game title W1 derives from the prompt (<=6 words)." },
@@ -31,6 +31,11 @@
         "coreLoop": { "type": "string", "minLength": 1, "description": "Copied from classification.json: the one-line loop W1 elaborates into milestones." },
         "coreVerb": { "type": "string", "minLength": 1, "description": "Copied from classification.json: the single central player verb (drives M1)." },
         "coreFantasy": { "type": "string", "description": "Optional emotional hook (from classification.json if present, else omit)." },
+        "failModel": {
+          "type": "string",
+          "enum": ["health", "lives", "respawn", "none"],
+          "description": "The ONE fail-model the design chose. The HUD surfaces only the resource this drives (health⇒HP bar, lives⇒life counter, respawn⇒spawn-return/none, none⇒sandbox). Must agree with loseCondition.observable. Prevents an inert maxHealth from being rendered as a phantom health bar (frog1)."
+        },
         "artStyle": { "type": "string", "minLength": 1, "description": "Short art-direction note (e.g. 'pixel art, bright, side-view'). Feeds W3 asset generation; 'placeholder' is valid for v1." },
         "physicsProfile": {
           "type": "object",
