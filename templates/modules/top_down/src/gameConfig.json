@@ -84,5 +84,7 @@
       "description": "Default enemy contact damage"
     }
   },
-  "controlsHelp": []
+  "controlsHelp": [],
+  "failModel": "health",
+  "objective": ""
 }

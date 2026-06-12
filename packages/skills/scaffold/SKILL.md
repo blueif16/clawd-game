@@ -134,7 +134,7 @@ The GDD gives flat `config:{ key:number }`. The template's `gameConfig.json` wra
    `"dropped config key '<k>' (not in <archetype> gameConfig schema)"` in `STRUCTURE.md` (Notes) and
    `MEMORY.md`. **Never invent a new `gameConfig` field.** _([repo] generate-gdd "do not invent".)_
 
-### 3.1 Carry `gdd.controls` into the runtime as `gameConfig.controlsHelp` (the on-screen "how to play")
+### 3.1 Carry `gdd.controls`, the spec's `failModel`, and `winCondition.description` into the runtime via `gameConfig`
 
 > The running game bundles ONLY `src/gameConfig.json` — it does NOT import `spec/gdd.json`. So the
 > documented controls must ride into the build through `gameConfig.json`, or a first-time player has
@@ -153,6 +153,14 @@ template `gameConfig.json` as `[]`):
    gracefully). Do not invent controls.
 3. This is the ONE new `gameConfig` group W2 adds; it is NOT a `screenSize`/`debugConfig`/`renderConfig`
    infra group and does not feed engine params — it is the player-facing controls hint only.
+4. Set `gameConfig.failModel` = the spec's `meta.failModel` VERBATIM (when scaffolding from a frozen
+   blueprint, `blueprint.meta.failModel`, falling back to `gdd.meta.failModel`; missing in both →
+   leave the template default and record it in MEMORY.md). Plain string, not the `{value,…}` wrapper.
+   This is the HUD-selection seam: the template UIScene shows the health bar IFF 'health', a lives
+   readout IFF 'lives', and no depleting-resource widget for 'respawn'/'none'. Never invent a value.
+5. Set `gameConfig.objective` = `winCondition.description` VERBATIM (missing → `""`). The
+   TitleScreen/UIScene render it as the one-line GOAL — the objective-legibility twin of
+   controlsHelp (a player must learn WHAT to do, not only WHICH keys). Do not author new prose.
 
 Write the merged `gameConfig.json` back. Validate it is still valid JSON.
 
@@ -305,7 +313,7 @@ Run **`npm run build`** in the project dir. It must succeed (`tsc --noEmit && vi
 
 Relative to the project dir:
 - The **copied project** (template module + core shell) — empty, building.
-- **`src/gameConfig.json`** — merged (`gdd.config` wrapped into the archetype sub-object; infra untouched) + `controlsHelp` populated from `gdd.controls[]` so the TitleScreen can render the on-screen "how to play" (§3.1).
+- **`src/gameConfig.json`** — merged (`gdd.config` wrapped into the archetype sub-object; infra untouched) + `controlsHelp`, `failModel`, `objective` populated from the spec (§3.1).
 - **`index.json`** (project root) — the asset slot manifest (valid against `index.schema.json`).
 - **`STRUCTURE.md`** (project root) — the architecture map, written in full.
 - **`src/main.ts`** — verified/ensured `window.__GAME__` per `template-contract.md` §3 (seam only).

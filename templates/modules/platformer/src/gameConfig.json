@@ -91,5 +91,7 @@
       "description": "Ultimate skill damage"
     }
   },
-  "controlsHelp": []
+  "controlsHelp": [],
+  "failModel": "health",
+  "objective": ""
 }

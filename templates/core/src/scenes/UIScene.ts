@@ -1,11 +1,16 @@
 import Phaser from 'phaser';
+import gameConfig from '../gameConfig.json';
 
 /**
  * UIScene (KEEP — engine HUD overlay; W4 may add HUD elements)
  *
  * Runs in parallel with the active level scene. Phaser-native (no DOM) HUD:
  * - score (from game.registry 'score')
- * - player health bar (from the level scene's `.player`)
+ * - player health bar — rendered ONLY when gameConfig.failModel === 'health'
+ *   ('lives' → a lives readout from registry 'lives'; 'respawn'/'none' → NO
+ *   depleting-resource widget: an inherited player.health field is not license
+ *   to render a health bar)
+ * - the standing objective one-liner (gameConfig.objective; empty → nothing)
  * - ESC to pause
  *
  * Launched by the base level scene: `this.scene.launch('UIScene', { gameSceneKey })`.
@@ -50,6 +55,24 @@ export default class UIScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(1002);
 
+    // Standing objective one-liner (WHAT-TO-DO), carried from the spec by W2
+    // via gameConfig.objective. Empty/absent → renders nothing (graceful).
+    const objectiveRaw = (gameConfig as Record<string, unknown>).objective;
+    const objective = typeof objectiveRaw === 'string' ? objectiveRaw : '';
+    if (objective.length > 0) {
+      this.add
+        .text(this.scale.width / 2, 14, `GOAL — ${objective}`, {
+          fontFamily: 'monospace',
+          fontSize: '14px',
+          color: '#ffd34a',
+          stroke: '#000000',
+          strokeThickness: 3,
+        })
+        .setOrigin(0.5, 0)
+        .setScrollFactor(0)
+        .setDepth(1000);
+    }
+
     this.input.keyboard?.on('keydown-ESC', () => this.pauseGame());
   }
 
@@ -78,7 +101,12 @@ export default class UIScene extends Phaser.Scene {
     this.healthBarBg.clear();
     this.healthBar.clear();
 
-    if (player && typeof player.health === 'number') {
+    // The HUD renders ONLY the resource the declared fail-model drives.
+    const failModel =
+      typeof (gameConfig as Record<string, unknown>).failModel === 'string'
+        ? ((gameConfig as Record<string, unknown>).failModel as string)
+        : 'health';
+    if (failModel === 'health' && player && typeof player.health === 'number') {
       const max = player.maxHealth || player.health || 1;
       const pct = Phaser.Math.Clamp(player.health / max, 0, 1);
       this.healthBarBg.fillStyle(0x000000, 0.6);
@@ -90,6 +118,10 @@ export default class UIScene extends Phaser.Scene {
         `${Math.max(0, Math.round(player.health))}/${Math.round(max)}`,
       );
       this.healthText.setPosition(x + w + 8, y);
+    } else if (failModel === 'lives') {
+      const lives = this.registry.get('lives');
+      this.healthText.setText(typeof lives === 'number' ? `Lives: ${lives}` : '');
+      this.healthText.setPosition(x, y);
     } else {
       this.healthText.setText('');
     }

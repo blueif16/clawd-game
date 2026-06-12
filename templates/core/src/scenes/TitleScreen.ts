@@ -19,6 +19,10 @@ interface ControlHint {
  * archetype-agnostic: it lists WHATEVER {input, action} pairs the GDD declared
  * (arrows/jump, WASD, grid moves, tower placement, UI clicks). Empty/absent →
  * renders nothing (graceful).
+ *
+ * Also renders the one-line GOAL from gameConfig.objective (the spec's
+ * winCondition.description carried into the build by W2 — WHAT-TO-DO, the
+ * twin of controlsHelp's HOW-TO-PLAY). Empty/absent → renders nothing.
  */
 export class TitleScreen extends Phaser.Scene {
   private isStarting = false;
@@ -44,6 +48,7 @@ export class TitleScreen extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
+    this.renderObjective(width, height);
     this.renderControlsHelp(width, height);
 
     this.add
@@ -59,6 +64,29 @@ export class TitleScreen extends Phaser.Scene {
     this.input.keyboard?.once('keydown-ENTER', () => this.startGame());
     this.input.keyboard?.once('keydown-SPACE', () => this.startGame());
     this.input.once('pointerdown', () => this.startGame());
+  }
+
+  /**
+   * Render the one-line GOAL from gameConfig.objective, above the
+   * "HOW TO PLAY" panel. Verbatim spec text (winCondition.description) —
+   * never authored here. Does nothing if objective is empty or absent.
+   */
+  private renderObjective(width: number, height: number): void {
+    const raw = (gameConfig as Record<string, unknown>).objective;
+    const objective = typeof raw === 'string' ? raw : '';
+    if (objective.length === 0) return;
+
+    this.add
+      .text(width / 2, height * 0.34, `GOAL — ${objective}`, {
+        fontFamily: 'monospace',
+        fontSize: '18px',
+        color: '#ffd34a',
+        stroke: '#000000',
+        strokeThickness: 3,
+        align: 'center',
+        wordWrap: { width: width * 0.85 },
+      })
+      .setOrigin(0.5);
   }
 
   /**

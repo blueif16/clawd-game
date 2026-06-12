@@ -153,6 +153,19 @@ Every value is wrapped: `{ "value": X, "type": "number|boolean|string|array", "d
 **One UNIVERSAL player-facing group every template has (W2 POPULATES it from `gdd.controls[]`):**
 - `controlsHelp` → a plain ARRAY of `{ "input": string, "action": string }` (NOT the `{value,…}` wrapper — it is a list, not a tuning number). Ships as `[]`; W2 fills it with a verbatim copy of `gdd.controls[]` (SKILL §3.1). The template's `TitleScreen` renders a generic "HOW TO PLAY" panel from it (archetype-agnostic); empty/absent → renders nothing. This carries the documented controls into the runtime, which bundles `gameConfig.json` but NOT `spec/gdd.json`.
 
+**Two more UNIVERSAL spec-carried keys every template has (plain values, NOT the `{value,…}` wrapper; W2 POPULATES them):**
+- `failModel` → `"health" | "lives" | "respawn" | "none"`, copied VERBATIM from the spec
+  (`blueprint.meta.failModel`, falling back to `gdd.meta.failModel`; absent in both → leave the
+  template default `"health"` and note it in MEMORY.md — never invent a value). The HUD (`UIScene`)
+  renders ONLY the resource this fail-model drives: the depleting health bar iff `"health"`, a lives
+  readout iff `"lives"` (from registry `'lives'`), and NO depleting-resource widget for
+  `"respawn"`/`"none"`. An inherited `player.health` field is NOT license to render a health bar —
+  that field exists on every BasePlayer regardless of whether the game has a health mechanic.
+- `objective` → string, copied VERBATIM from `winCondition.description` (absent → `""`). The
+  TitleScreen renders it as a one-line `GOAL — <objective>` with the HOW TO PLAY panel and the
+  UIScene surfaces it as a standing one-liner; empty → renders nothing (graceful). This carries
+  WHAT-TO-DO into the runtime the same way `controlsHelp` carries HOW-TO-PLAY.
+
 **The per-archetype game-specific sub-object (where W2 merges `gdd.config`):**
 
 | archetype | sub-object | keys W1 may set (flat → wrapped here) |

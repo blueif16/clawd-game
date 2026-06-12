@@ -25,5 +25,7 @@
       "description": "Enable pixel-art (nearest-neighbour) rendering"
     }
   },
-  "controlsHelp": []
+  "controlsHelp": [],
+  "failModel": "health",
+  "objective": ""
 }
