@@ -146,10 +146,10 @@ WORKABLE GAME from the producing path alone, NOT leaning on the verify flow. The
 | W0 Classify | ✅ **PASS** (no fix) — blind not needed (clean diagnosis) | — | coverage gap: add a genre-word TRAP prompt (label≠physics) in a later sweep |
 | W1 Spec | ✅ **PASS** — PASS-WITH-NITS → fixed → blind judge PASS | `failModel` machine-readable (`09c5742`) | exit-placement reach (~220px/jump vs x≈1050) → **W4** fidelity; `failModel` CONSUMER (HUD seam) → **W2** (closed `b9d9cbc`); parked: progress-to-win readout (`score/N`) needs a machine-readable win-gate target W1 does not yet declare — **W1**'s half of D2 |
 | VERIFY-1 Design | ⏭ pass-through (NOT validated this sweep) | — | parked (verify-node owner, deferred per sweep scope): VERIFY-1 drops `meta.failModel` at the gdd→blueprint hand-off (blueprint.meta lacks it though gdd declares it and W2's prompt names the blueprint the single source of truth; W2's `blueprint.meta.failModel ?? gdd.meta.failModel` fallback covers meanwhile) — `verify-design` SKILL + blueprint schema |
-| W2 Scaffold | 🛠 **PASS-WITH-NITS** → fix applied (`b9d9cbc`) → re-run pending | failModel + objective carried into gameConfig; HUD keyed off the fail-model (`b9d9cbc`) | hud-healthbar CONSUMER + broad-playability D2 (objective legibility) — both reproduced in nv1, both closed by `b9d9cbc` |
-| W3 Assets | ⏳ pending | — | asset-visuals (baked name-labels; fixture L83/L91 also move) folds in |
-| W4 Execute M1 | ⏳ pending (M1 only) | — | win-completion build seam + respawn-as-live-reset (D5) + spatial coherence (D3) fold in |
-| VERIFY-2 QA | ⏸ DEFERRED (verify nodes ignored this sweep) | — | — |
+| W2 Scaffold | ✅ **PASS** — fix `b9d9cbc` → clean-room re-run → blind judge PASS-WITH-NITS (cosmetic only) | failModel + objective carried into gameConfig; HUD keyed off the fail-model (`b9d9cbc`); + slot dims = PER-FRAME clarification (`27ae385`) | hud-healthbar CONSUMER + broad-playability D2 (objective legibility) — both reproduced in nv1, both closed by `b9d9cbc` |
+| W3 Assets | ❌ **FAIL** (capture-judged: baked labels reproduced on all 5 textures; executor faultless) → de-label fix applied → clean-room re-run pending in `out/nv1` (post-W2-fix chain — lane caveat erased for W3) | de-label: color + role silhouette, NEVER text in player-visible pixels (`158295b`) | chain/pi-runner scratch-path allowance (`_pi/` writes vs DRIVER-OWNS) parked as a transform-workflow-to-pi upgrade |
+| W4 Execute M1 | ✅ **PASS-WITH-NITS** — blueprint-verbatim / hook-truthful / KEEP-clean / green build; latent respawn-FSM-sink defect caught + fixed prophylactically, validation parked at the M2 gate (human: NO M1 re-run — the defect can only manifest on the M2 damage path) | respawn-returns-CONTROL, §3.5 step 4 (`b518a20`) | M2 gate inherits the respawn-in-motion probe + PatrolAI `Math.random()` initial-direction determinism (templates owner, frog1 D4); M3/final gate inherits the win/completion seam share |
+| VERIFY-2 QA | ⏸ DEFERRED (verify nodes ignored this sweep) | — | inherits the post-respawn input-drives-player probe gap (the acceptance vocabulary cannot express "controls still work after the respawn event") |
 
 _NOTE (2026-06-12, per human direction): the sweep is now PARALLELIZED — the W3 + W4-M1 baselines run in
 lane `out/nv1-w34` on the PRE-W2-fix scaffold clone (caveat recorded: those baselines are NOT on top of the
@@ -427,6 +427,26 @@ session can retrace the evidence behind any edit. A claim with no doc on disk is
   respawn game; no on-screen objective). (skillsys b9d9cbc skillsys(scaffold); supporting:
   `_prior-runs/frog1-postmortem/hud-healthbar.md`, `_prior-runs/frog1-postmortem/broad-playability.md` D2,
   `_prior-runs/nv1/w2-diagnosis.md`.)
+- 2026-06-12 — `assets/SKILL.md` §4 + `game-omni.js:422` + `assets.schema.json` (+ `## W3 Assets` fixture
+  L85/L87/L95) — **de-label: placeholders are role-distinct by color+silhouette, NEVER typed text in
+  player-visible pixels.** nv1 W3 (lane w34): FAIL capture-judged / PASS-WITH-NITS pre-capture — baked-name
+  labels reproduced on all 5 textures exactly as SKILL §4 + game-omni.js:422 + fixture L87 mandated (executor
+  faultless; dims/alpha/write-back/loaderHints all verified green at pixel level); fix = de-label SKILL §4 +
+  chain prompt + schema examples, fixture re-pointed label→color+silhouette. (skillsys `158295b`; supporting:
+  `_prior-runs/nv1/w3-diagnosis.md`, `_prior-runs/frog1-postmortem/asset-visuals.md`.)
+- 2026-06-12 — `implement-milestone/SKILL.md` §3.5 (+ `## W4 Execute` fixture AC2/red-flag) —
+  **respawn-returns-CONTROL rule.** nv1 W4 M1 PASS-WITH-NITS (verbatim geometry/config, green build,
+  truthful hook, exact scope) but its soft-respawn foundation leaves the FSM parked in the 'dying'
+  sink on the (M2) damage path → frozen player that both frozen observables miss; §3.5 gains step 4
+  "reset every layer the funnel latched incl. the state machine; controls must drive the player after
+  the handler". (skillsys `b518a20`; evidence: `_prior-runs/nv1/w4-m1-diagnosis.md`, lane `out/nv1-w34/`
+  PRE-W2-fix scaffold caveat recorded.)
+- 2026-06-12 — `scaffold/index.schema.json` width/height + `scaffold/SKILL.md` §4 (+ `## W2 Scaffold` /
+  `## W3 Assets` fixture dims lines) — **slot width/height are PER-FRAME dims (the Preloader's frameWidth),
+  never sheet width.** nv1 W2 emitted sheet-width animation dims (the schema said only "Pixel width" while
+  the template Preloader feeds slot.width into load.spritesheet's frameWidth), so W3's contract-correct
+  strips rendered 3:1/2:1 stretched frames at runtime; the authoring site + fixtures now pin the
+  frame-of-reference. (skillsys `27ae385`; supporting: `_prior-runs/nv1/w3-diagnosis.md` parked item 1.)
 - _(future flaws/fixes append here so repeat-flaws become visible and the next diagnosis starts ahead.)_
 
 ## Stewardship note
