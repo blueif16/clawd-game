@@ -156,6 +156,20 @@ lane `out/nv1-w34` on the PRE-W2-fix scaffold clone (caveat recorded: those base
 post-fix artifact chain; the `b9d9cbc` fix lands for every future scaffold and the W2 re-run is pending)._
 _NOTE (2026-06-12): the cloud workflow run `wf_e9f9e1f6-42f` → `out/cw1` doubles as the post-fix END-TO-END
 quality check for the W3 dims/opacity fixes (`1c19f07`/`485bf69`) — it reloads the edited assets SKILL live._
+_NOTE (2026-06-12, cw1 run-level deviations — THREE, human-directed mid-run; applied ONLY to the run's
+script copy, canonical `game-omni.js` untouched): **(1) VERIFY-1 stopped-then-skipped** — its artifacts had
+already landed (`out/cw1/spec/blueprint.json` `DESIGN_PASSED` + `DESIGN_REVIEW.md`, M1–M3) when the human
+called it stalled; the run was stopped, the script copy stubs `v1 = null` (milestone list falls back to the
+gdd's identical M1–M3; downstream reads the blueprint from DISK, so the hardened design still governs).
+**(2) W2/W3/W4 on Sonnet** (`model:'sonnet'` in the run copy's agent opts) — the cheaper-Claude quality
+probe. **(3) VERIFY-2 skipped** (stubbed `marker:'SKIPPED'`) — producing-path scope; no QA gate this run, the
+human's eye + the criteria fixture judge the artifact. TRACINGS: run id `wf_e9f9e1f6-42f` (resumed once via
+`resumeFromRunId` — W0/W1 returned cached from the journal); edited script copy =
+`~/.claude/projects/-Users-tk-Desktop-game-omni/<session>/workflows/scripts/game-omni-wf_e9f9e1f6-42f.js`;
+per-agent transcripts + `journal.jsonl` = `<same session dir>/subagents/workflows/wf_e9f9e1f6-42f/`;
+artifacts = `out/cw1/`. Caveat for any later comparison: cw1's W2+ artifacts are SONNET-craft on a
+Fable-judged blueprint, and the killed VERIFY-1 agent's structured RETURN was never journaled (disk
+artifacts are the only record of its output)._
 
 ## Product code (built against the skill contracts)
 1. **Genre templates (build-plan Phase 1).** `templates/core/` (shared engine: `hook.ts` = the
