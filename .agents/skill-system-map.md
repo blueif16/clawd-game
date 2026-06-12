@@ -105,6 +105,36 @@ game-omni.js. Each skill cites its provenance inline (repo path or URL) — no r
   recovery as the node-timeout approaches) before intervening; the runner's early-kill is reserved for a
   repeated-delta stuck-loop, not silence.)_
 
+## Node-validation loop — per-node binding (the run mechanics)
+The `hermes-skill-system` **node-validation-loop** (`references/node-validation-loop.md`) hardens this pipeline
+ONE node at a time: per node — DIAGNOSIS subagent (judge the artifact vs its **criteria fixture** entry → propose
+a skill diff) → human Gate 1 → APPLY subagent (commit) → orchestrator re-runs JUST that node on the executor
+(MiniMax-M3) reusing frozen upstream → INDEPENDENT (blind) JUDGE subagent → human Gate 2 → advance. This table is
+the repo-specific binding the loop needs (entry point · artifact · owner skill · fixture anchor · re-run command).
+
+| Node | `--only` target (id) | Artifact(s) judged | Owner skill (the fix lands here) | Criteria fixture anchor |
+|---|---|---|---|---|
+| W0 Classify | `w0-classify` | `spec/classification.json` | `packages/skills/classify-game/` | `## W0 Classify` |
+| W1 Spec | `w1-spec` | `spec/gdd.json` + `spec/PLAN.md` | `packages/skills/write-gdd/` | `## W1 Spec` |
+| VERIFY-1 Design | `verify-1-design` | `spec/blueprint.json` + `spec/DESIGN_REVIEW.md` | `packages/skills/verify-design/` | `## VERIFY-1 Design` |
+| W2 Scaffold | `w2-scaffold` | `STRUCTURE.md` + `index.json` (+ the scaffolded project) | `packages/skills/scaffold/` (+ `template-contract.md`) | `## W2 Scaffold` |
+| W3 Assets | `w3-assets` | `ASSETS.md` + `public/assets/*` + `index.json` paths | `packages/skills/assets/` | `## W3 Assets` |
+| W4 Execute (per milestone) | `w4-execute-m<k>` | `src/**` slice + `MEMORY.md` | `packages/skills/implement-milestone/` | `## W4 Execute` |
+| VERIFY-2 QA (per milestone) | `verify-2-m<k>` | `verify/report.M<k>.json` | `packages/skills/verify/` (+ assertion/perturbation grammars) | `## VERIFY-2 QA` |
+
+- **Criteria fixture:** `.agents/skill-system-criteria.md` (the per-node QUALITY bar; sibling of this map). The
+  DIAGNOSIS + INDEPENDENT-JUDGE subagents READ it to judge — it is **NEVER injected** into a producing node's prompt.
+- **Re-run command (single node, on the executor, escalation OFF, debug ON):**
+  `node pi-runner/run.mjs --run <id> --arg projectDir=out/<id> --only <node-id> --debug` — reuses frozen upstream
+  from disk; the resume preflight verifies the skipped nodes' `DRIVER-ARTIFACTS` exist first. Use `--from <node-id>`
+  for the closing end-to-end suffix (OPERATE step 8) once a sweep is done.
+- **Wrinkle — per-milestone nodes share a phase title** ("W4 Execute" / "VERIFY-2 QA" repeat per milestone): target by
+  the **node ID** (`w4-execute-m2`), NOT the phase title, or `--from/--only` spans every milestone. Judge only the
+  target; if a sibling drifts, restore its previously-validated artifact.
+- **Loop artifacts live OUTSIDE every node's read-scope** (the readScope each `contract()` declares grants the project
+  dir): write the DIAGNOSIS proposal + the bad-run backup (`<artifact>.PRE-<NODE>FIX`) to a repo-root `_prior-runs/<run-id>/`,
+  NEVER under `out/<id>/` — else the clean-room re-run can read the proposed fix (teaching-to-the-test).
+
 ## Product code (built against the skill contracts)
 1. **Genre templates (build-plan Phase 1).** `templates/core/` (shared engine: `hook.ts` = the
    `window.__GAME__` adapter, placeholder-filling `Preloader.ts`, UI scenes, `LevelManager`, build config)
