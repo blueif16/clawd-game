@@ -9,7 +9,7 @@ flowchart TD
   IN(["args.prompt + args.projectDir"]):::io
 
   W0["<b>W0 · Classify</b><br/><i>Designer — classify-game</i><br/>physics-first archetype<br/>+ core loop + scope-cut"]:::designer
-  W1["<b>W1 · Spec</b><br/><i>Designer — write-gdd</i><br/>slim GDD + 2–5 milestones,<br/>each with runtime assertions<br/>(the design THESIS)"]:::designer
+  W1["<b>W1 · Spec</b><br/><i>Designer — write-gdd</i><br/>slim GDD (incl. failModel)<br/>+ 3–5 milestones,<br/>each with runtime assertions<br/>(the design THESIS)"]:::designer
   V1["<b>VERIFY-1 · Design</b><br/><i>Design Critic — verify-design</i><br/>STATIC, pre-code: judge + HARDEN<br/>→ frozen winnable blueprint<br/>(rubric · kinematic feasibility ·<br/>threat-on-path · declaredRanges)"]:::critic
   W2["<b>W2 · Scaffold</b><br/><i>Coder — scaffold</i><br/>copy template → empty green<br/>build + expose __GAME__ hook"]:::coder
   W3["<b>W3 · Assets</b><br/><i>Artist — assets</i><br/>fill asset slots<br/>(placeholder-first)"]:::artist

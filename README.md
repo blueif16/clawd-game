@@ -108,7 +108,7 @@ Encoded once in `game-omni.js`, never copied into the skills:
   else serves. Deterministic; gibberish → `platformer` default; no-fit → closest + `confidence:"low"`.
 
 ### W1 · Spec — Designer · `write-gdd`
-`spec/classification.json` → `spec/gdd.json` (slim gameDNA + **2–5 milestones**) + `spec/PLAN.md` — the design
+`spec/classification.json` → `spec/gdd.json` (slim gameDNA incl. machine-readable **failModel** + **3–5 milestones**) + `spec/PLAN.md` — the design
 *thesis* VERIFY-1 hardens into the frozen blueprint.
 - **Slim GDD, constrained to the template.** Never invent a capability the template lacks — the GDD is a
   *composition* of template hooks, not a wishlist.
