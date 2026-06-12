@@ -277,6 +277,13 @@ placeholder (`status:'placeholder'`).
 **The rule:** mutate ONLY `slots[i].path` and `slots[i].status` (and, if you refined them,
 `slots[i].width`/`height`). **NEVER change any `slot` KEY, never reorder/add/remove rows, never touch
 `archetype`/`assetsDir`.** _([contract] W2 owns keys; W4 references them.)_
+- **Dims-coherence is a DUTY, not an option:** the written-back `width`/`height` MUST equal the
+  actual per-frame pixel dims of the file you shipped — for `type:'animation'`, file width ===
+  `frames.length × width` (and file height === `height`) must hold, because the Preloader feeds
+  these numbers into `frameWidth`/`frameHeight`. If the produced file disagrees with the inherited
+  slot dims, REFINE the write-back (`path`/`status`/`width`/`height` are the writable fields) so
+  **manifest === bytes**. The `ASSETS.md` row and the `index.json` row MUST state the same per-frame
+  dims — a self-contradictory manifest pair is a W3 failure even when the pixels are right.
 - **Read `index.json` fresh just before writing** (read-modify-write), set the two fields per slot
   you filled, and write the whole file back **once, atomically** (single replace) at the end — so a
   concurrent reader (W4 / the Preloader) always sees a complete, valid file, never a half-write.
