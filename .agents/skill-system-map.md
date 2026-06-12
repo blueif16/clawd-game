@@ -393,6 +393,12 @@ session can retrace the evidence behind any edit. A claim with no doc on disk is
   from the platform below") + the "jump between ledges" loop depend on; W4 would invent it or fall back to a
   template. Verify: no blueprint passes completeness while a referenced element is absent from `layout`/out of
   bounds. (skillsys f049b98; supporting: `out/tower1/spec/blueprint.json` + `DESIGN_REVIEW.md`.)
+- 2026-06-12 — `write-gdd/SKILL.md` §3 + `gdd.schema.json` meta.failModel — **HUD-model coherence (the
+  status-model twin).** W1 now declares ONE machine-readable fail-model (health|lives|respawn|none) agreeing
+  with loseCondition, so the HUD surfaces only a game-driven resource. Trigger: frog1 hud-healthbar (static
+  100/100 bar on a respawn game) + nv1 "Crystal Chasm" repeating the inert-maxHealth setup. (skillsys
+  09c5742 skillsys(write-gdd); supporting: `_prior-runs/frog1-postmortem/hud-healthbar.md`,
+  `_prior-runs/nv1/w1-diagnosis.md`.)
 - _(future flaws/fixes append here so repeat-flaws become visible and the next diagnosis starts ahead.)_
 
 ## Stewardship note
