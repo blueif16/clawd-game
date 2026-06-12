@@ -207,9 +207,20 @@ The `blueprint.referenceSolution` and the per-milestone `blueprint.acceptanceCri
      respawn checkpoint if the blueprint specifies one).
   2. `registry.set('status', 'playing')` — it stays `'playing'`, it does NOT transition to `'lost'`.
   3. No `GameOverUIScene` launch, no scene restart — the blueprint's flow is a live respawn.
+  4. **Return CONTROL — reset every stateful layer the death funnel latched.** Trace the FULL funnel
+     that reaches your respawn handler (e.g. `takeDamage → FSM 'hurting' → checkDeath → 'dying' →
+     onPlayerDeath`) and reset each layer that latched along the way: health/death flags, body
+     velocity/position, AND the entity's state machine — return it to its base/live state via its
+     PUBLIC API (e.g. the platformer FSM's `player.fsm.returnToBaseState()`); never leave it parked
+     in a terminal state (`'dying'`) that ignores input. A respawn that teleports the body but leaves
+     the state machine dead is a FROZEN player: the game is unwinnable after the first hit while the
+     position/status observables both read green (player-at-spawn ∧ status `'playing'`), so no
+     assertion catches it — only this construction rule does. Done-check: after your handler runs,
+     the documented controls must drive the player again.
   A "back-to-start implemented as full GAME OVER" is the exact class VERIFY-2's §5 status-legality
-  invariant catches. Build the RESPAWN the blueprint froze. _([VERIFY-2 §8 "back to start implemented as
-  full GAME OVER" contortion class].)_
+  invariant catches — and a "back-to-start that never gives back control" is its silent twin. Build
+  the RESPAWN the blueprint froze. _([VERIFY-2 §8 "back to start implemented as full GAME OVER"
+  contortion class]; [nv1 w4-m1] FSM-'dying'-sink frozen-player latent defect.)_
 
 ### 3.6 Avoid the known Phaser/AI-codegen pitfalls BY CONSTRUCTION
 > Source: `[R]` r/phaser (physics body/texture, body.reset, init() reset, overlap-on-global);
