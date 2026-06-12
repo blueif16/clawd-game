@@ -2,7 +2,7 @@
 
 _Hermes INIT map. The single answer to "what is our skill system, and what workflow orchestrates it?"
 Free-form, no scores. Evolves and gets more certain with every run — append responsibilities, notes, and
-diagnostics as we learn them; a stale map is the one real failure mode. Last refreshed: 2026-06-10._
+diagnostics as we learn them; a stale map is the one real failure mode. Last refreshed: 2026-06-12._
 
 ## What this system is
 An AI **game-generation engine**: one prompt → a verified, playable Phaser 2D web game in one pass.
@@ -134,6 +134,22 @@ the repo-specific binding the loop needs (entry point · artifact · owner skill
 - **Loop artifacts live OUTSIDE every node's read-scope** (the readScope each `contract()` declares grants the project
   dir): write the DIAGNOSIS proposal + the bad-run backup (`<artifact>.PRE-<NODE>FIX`) to a repo-root `_prior-runs/<run-id>/`,
   NEVER under `out/<id>/` — else the clean-room re-run can read the proposed fix (teaching-to-the-test).
+
+### Node-validation sweep status (per-node loop OUTCOMES; the orchestrator updates this at each Gate 2)
+_Sweep `nv1` — fresh cave-explorer platformer prompt ("Crystal Chasm"), MiniMax-M3 executor, escalation OFF. **Scope
+(human-directed):** harden the PRODUCING path W0→W4; VERIFY-1 runs pass-through only; VERIFY-2 DEFERRED. The end goal is a
+WORKABLE GAME from the producing path alone, NOT leaning on the verify flow. The 4 frog1 post-mortem captures
+(`_prior-runs/frog1-postmortem/`) fold into each owning node's gate. Started 2026-06-12._
+
+| Node | Sweep outcome | Edit (skillsys) | Parked / folds-in here |
+|---|---|---|---|
+| W0 Classify | ✅ **PASS** (no fix) — blind not needed (clean diagnosis) | — | coverage gap: add a genre-word TRAP prompt (label≠physics) in a later sweep |
+| W1 Spec | ✅ **PASS** — PASS-WITH-NITS → fixed → blind judge PASS | `failModel` machine-readable (`09c5742`) | exit-placement reach (~220px/jump vs x≈1050) → **W4** fidelity; `failModel` CONSUMER (HUD seam) → **W2** |
+| VERIFY-1 Design | ⏭ pass-through (NOT validated this sweep) | — | — |
+| W2 Scaffold | ▶ **NEXT** | — | hud-healthbar CONSUMER (HUD keys off `failModel`, read from gdd) + broad-playability D2 objective-legibility fold in |
+| W3 Assets | ⏳ pending | — | asset-visuals (baked name-labels; fixture L83/L91 also move) folds in |
+| W4 Execute M1 | ⏳ pending (M1 only) | — | win-completion build seam + respawn-as-live-reset (D5) + spatial coherence (D3) fold in |
+| VERIFY-2 QA | ⏸ DEFERRED (verify nodes ignored this sweep) | — | — |
 
 ## Product code (built against the skill contracts)
 1. **Genre templates (build-plan Phase 1).** `templates/core/` (shared engine: `hook.ts` = the
