@@ -180,7 +180,7 @@ is NOT a Phaser JSON-Hash atlas file (that's a per-atlas frame file W3 may produ
 **Build the slot list = `gdd.assetList[]` UNION any `gdd.entities[].assetSlot` not already covered:**
 1. One row per `assetList[]` entry → `{ slot, type, path, width, height, frames?, entityIds?, description, status:"pending" }`.
    - `path` = a conventional default (e.g. `sprites/<slot>.png`, `tiles/<slot>.png`, `backgrounds/<slot>.png`, `audio/<slot>.mp3` by `type`). W3 confirms/overwrites when it writes the file.
-   - `width`/`height` = `assetList[].width/height` if present, else an **archetype default HINT** (see below) W3 may refine.
+   - `width`/`height` = `assetList[].width/height` if present, else an **archetype default HINT** (see below) W3 may refine. These are **PER-FRAME dims** (the Preloader's `frameWidth`/`frameHeight`), NEVER sheet width — for `type:"animation"` emit one frame's dims (e.g. 64×64); the on-disk strip W3 writes is `frames.length × width` wide.
    - `frames` = `assetList[].frames` for `type:"animation"`; omit otherwise.
    - `entityIds` = the `entities[].id`s whose `assetSlot` == this slot (provenance).
    - `description` = `assetList[].description` (W3's generation prompt).

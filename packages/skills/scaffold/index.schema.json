@@ -42,12 +42,12 @@
           "width": {
             "type": "integer",
             "minimum": 1,
-            "description": "Pixel width. From gdd.assetList[].width if present, else an archetype default (a HINT W3 may refine and write back)."
+            "description": "Pixel width — PER-FRAME dims (the Preloader's frameWidth), NEVER the sheet width: for type:'animation' the on-disk strip is frames.length × width wide. From gdd.assetList[].width if present, else an archetype default (a HINT W3 may refine and write back)."
           },
           "height": {
             "type": "integer",
             "minimum": 1,
-            "description": "Pixel height (same sourcing as width)."
+            "description": "Pixel height — PER-FRAME (the Preloader's frameHeight; same sourcing as width)."
           },
           "frames": {
             "type": "array",
