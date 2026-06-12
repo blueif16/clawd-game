@@ -147,13 +147,15 @@ WORKABLE GAME from the producing path alone, NOT leaning on the verify flow. The
 | W1 Spec | ✅ **PASS** — PASS-WITH-NITS → fixed → blind judge PASS | `failModel` machine-readable (`09c5742`) | exit-placement reach (~220px/jump vs x≈1050) → **W4** fidelity; `failModel` CONSUMER (HUD seam) → **W2** (closed `b9d9cbc`); parked: progress-to-win readout (`score/N`) needs a machine-readable win-gate target W1 does not yet declare — **W1**'s half of D2 |
 | VERIFY-1 Design | ⏭ pass-through (NOT validated this sweep) | — | parked (verify-node owner, deferred per sweep scope): VERIFY-1 drops `meta.failModel` at the gdd→blueprint hand-off (blueprint.meta lacks it though gdd declares it and W2's prompt names the blueprint the single source of truth; W2's `blueprint.meta.failModel ?? gdd.meta.failModel` fallback covers meanwhile) — `verify-design` SKILL + blueprint schema |
 | W2 Scaffold | ✅ **PASS** — fix `b9d9cbc` → clean-room re-run → blind judge PASS-WITH-NITS (cosmetic only) | failModel + objective carried into gameConfig; HUD keyed off the fail-model (`b9d9cbc`); + slot dims = PER-FRAME clarification (`27ae385`) | hud-healthbar CONSUMER + broad-playability D2 (objective legibility) — both reproduced in nv1, both closed by `b9d9cbc` |
-| W3 Assets | ❌ **FAIL** (capture-judged: baked labels reproduced on all 5 textures; executor faultless) → de-label fix applied → clean-room re-run pending in `out/nv1` (post-W2-fix chain — lane caveat erased for W3) | de-label: color + role silhouette, NEVER text in player-visible pixels (`158295b`) | chain/pi-runner scratch-path allowance (`_pi/` writes vs DRIVER-OWNS) parked as a transform-workflow-to-pi upgrade |
+| W3 Assets | ❌→🔧 **de-label `158295b` VALIDATED by blind judge** (zero typed text; role-distinct color+silhouette; per-frame value shifts) on the regenerated artifact — residual blind-judge **FAIL** on two classes: dims-coherence (stale pre-`27ae385` upstream index.json + W3's own manifest self-contradiction) + bg opacity (transparent "light spill" vs an "opaque" claim) → fixed (`1c19f07` dims write-back duty, `485bf69` opaque-incl-effects + verify-then-claim) → live validation DELEGATED to the CLOUD workflow run (`wf_e9f9e1f6-42f` → `out/cw1`, fresh gnome-garden prompt, Claude executor — the quality-check run the human requested); pi-side suffix re-run SKIPPED per human decision | de-label: color + role silhouette, NEVER text in player-visible pixels (`158295b`); dims write-back = manifest===bytes (`1c19f07`); bg fully opaque + verify-then-claim manifest (`485bf69`) | chain/pi-runner scratch-path allowance (`_pi/` writes vs DRIVER-OWNS) parked as a transform-workflow-to-pi upgrade |
 | W4 Execute M1 | ✅ **PASS-WITH-NITS** — blueprint-verbatim / hook-truthful / KEEP-clean / green build; latent respawn-FSM-sink defect caught + fixed prophylactically, validation parked at the M2 gate (human: NO M1 re-run — the defect can only manifest on the M2 damage path) | respawn-returns-CONTROL, §3.5 step 4 (`b518a20`) | M2 gate inherits the respawn-in-motion probe + PatrolAI `Math.random()` initial-direction determinism (templates owner, frog1 D4); M3/final gate inherits the win/completion seam share |
 | VERIFY-2 QA | ⏸ DEFERRED (verify nodes ignored this sweep) | — | inherits the post-respawn input-drives-player probe gap (the acceptance vocabulary cannot express "controls still work after the respawn event") |
 
 _NOTE (2026-06-12, per human direction): the sweep is now PARALLELIZED — the W3 + W4-M1 baselines run in
 lane `out/nv1-w34` on the PRE-W2-fix scaffold clone (caveat recorded: those baselines are NOT on top of the
 post-fix artifact chain; the `b9d9cbc` fix lands for every future scaffold and the W2 re-run is pending)._
+_NOTE (2026-06-12): the cloud workflow run `wf_e9f9e1f6-42f` → `out/cw1` doubles as the post-fix END-TO-END
+quality check for the W3 dims/opacity fixes (`1c19f07`/`485bf69`) — it reloads the edited assets SKILL live._
 
 ## Product code (built against the skill contracts)
 1. **Genre templates (build-plan Phase 1).** `templates/core/` (shared engine: `hook.ts` = the
@@ -447,6 +449,15 @@ session can retrace the evidence behind any edit. A claim with no doc on disk is
   the template Preloader feeds slot.width into load.spritesheet's frameWidth), so W3's contract-correct
   strips rendered 3:1/2:1 stretched frames at runtime; the authoring site + fixtures now pin the
   frame-of-reference. (skillsys `27ae385`; supporting: `_prior-runs/nv1/w3-diagnosis.md` parked item 1.)
+- 2026-06-12 — `assets/SKILL.md` §6a + §4 background bullet + §6b — **dims write-back duty (manifest === bytes)
+  + backgrounds fully opaque incl. effect regions + verify-then-claim ASSETS.md rows.** nv1 W3 re-run blind-judged:
+  de-label `158295b` VALIDATED, but (1) correct 64×64 cells shipped with stale sheet-value slot dims left unrefined
+  (frameWidth would slice ONE frame) while its own ASSETS.md said "64×64 per frame" — root: stale pre-`27ae385`
+  upstream index.json + W3's manifest self-contradiction; (2) a background shipped a fully-transparent effect
+  region while its row claimed "fully opaque" (unverified provenance). Fixes: write-back width/height MUST equal
+  the shipped file's per-frame dims (`1c19f07`); backgrounds opaque across the ENTIRE canvas, glows baked as
+  opaque blends, manifest rows verify-then-claim (`485bf69`). Live validation: cloud run `wf_e9f9e1f6-42f` →
+  `out/cw1`. (supporting: `_prior-runs/nv1/w3-blind-judge-verdict.md`.)
 - _(future flaws/fixes append here so repeat-flaws become visible and the next diagnosis starts ahead.)_
 
 ## Stewardship note
