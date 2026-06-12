@@ -58,15 +58,20 @@ const PREAMBLE = `You are ONE node in the game-omni generation pipeline. Non-neg
 function nodePrompt(skillPath, body, contractStr = '') { return `${PREAMBLE}\n\nSKILL TO LOAD AND FOLLOW: ${skillPath}\n\n${body}${contractStr ? '\n\n' + contractStr : ''}` }
 
 // The 4th contract layer (artifact contract) — ONE declaration renders the Definition-of-Done
-// prose (the model reads) AND the DRIVER-ARTIFACTS/DRIVER-OWNS markers (pi-runner/run.mjs parses,
-// verified independent of the self-report). Paths are PROJECT-relative; the driver resolves them
-// forgivingly. Spec: ~/.claude/skills/transform-workflow-to-pi/reference/artifact-contract.md.
-function contract({ artifacts = [], owns = [], note = '' }) {
+// prose (the model reads) AND the DRIVER-ARTIFACTS/DRIVER-OWNS/DRIVER-READ-SCOPE markers
+// (pi-runner/run.mjs parses, verified independent of the self-report). `artifacts`/`owns` are
+// PROJECT-relative (the driver resolves them forgivingly); `readScope` is the node's FULL legitimate
+// READ surface — its own project tree PLUS the shared skill/template roots it is pointed at — joined
+// AS-IS (repo-relative, matching this workflow's path style; resolved against the repo-root cwd under
+// --sandbox, inert otherwise). EVERY producing node declares one, the same tier as artifacts/owns.
+// Spec: ~/.claude/skills/transform-workflow-to-pi/reference/artifact-contract.md (+ read-scope-sandbox.md).
+function contract({ artifacts = [], owns = [], readScope = [], note = '' }) {
   const abs = (p) => `${PROJECT}/${p}`
   return [
     'OUTPUT CONTRACT — you are DONE only when EVERY file below exists and is non-empty at EXACTLY its path. Write NOTHING outside the owned paths. If you cannot, set status="blocked" and say why — do NOT exit clean (an empty or wrong-path artifact set is a FAILURE, not an ok).',
     artifacts.length ? `DRIVER-ARTIFACTS: ${artifacts.map(abs).join(' ')}` : '',
     `DRIVER-OWNS: ${(owns.length ? owns : artifacts).map(abs).join(' ')}`,
+    readScope.length ? `DRIVER-READ-SCOPE: ${readScope.join(' ')}` : '',
     note ? `OWNED-PATH NOTE: ${note}` : '',
   ].filter(Boolean).join('\n')
 }
@@ -119,7 +124,7 @@ Do exactly three things, then stop:
 3. Write an explicit scopeCut (4-8 items) of what is deliberately OUT — the anti-slop guardrail. Cut anything not serving the core loop and the standard over-scope traps; NEVER cut game-feel/juice.
 
 Write exactly one file: ${PROJECT}/spec/classification.json (create ${PROJECT}/spec/ if needed), valid against packages/skills/classify-game/classification.schema.json. Then return the same object as your structured result. On a prompt that fits no archetype, pick the closest, set confidence:"low", and explain in reasoning; default to platformer for empty/gibberish. Classify deterministically (low temperature).`,
-    contract({ artifacts: ['spec/classification.json'], owns: ['spec/**'] })),
+    contract({ artifacts: ['spec/classification.json'], owns: ['spec/**'], readScope: [PROJECT, 'packages/skills/classify-game'] })),
   { label: 'W0 classify', phase: 'W0 Classify', schema: CLASSIFICATION_SCHEMA }
 )
 
@@ -278,7 +283,7 @@ const w1 = await agent(
 Design the slim Game Design Doc CONSTRAINED to the chosen archetype template's capabilities, and decompose classification.coreLoop into 3-5 PLAYABLE milestones (default 3): M1 = the core loop plays at all; the final milestone includes a win and/or lose end-state. For each milestone write acceptance criteria + executable runtime assertions (Given setup -> When input -> Then observe+expect) over the live game object window.__GAME__, 1:1 with the criteria, asserting OBSERVABLE behavior never implementation. Respect classification.scopeCut as a hard boundary; never invent a capability the template lacks; never cut the juice.
 
 Write exactly two files under ${PROJECT}/spec/, valid against packages/skills/write-gdd/gdd.schema.json: gdd.json and PLAN.md. Then return the gdd.json object as your structured result and stop.`,
-    contract({ artifacts: ['spec/gdd.json', 'spec/PLAN.md'], owns: ['spec/**'] })),
+    contract({ artifacts: ['spec/gdd.json', 'spec/PLAN.md'], owns: ['spec/**'], readScope: [PROJECT, 'packages/skills/write-gdd'] })),
   { label: 'W1 spec', phase: 'W1 Spec', schema: GDD_SCHEMA }
 )
 
@@ -338,7 +343,7 @@ Do two inseparable things, per the SKILL's fixed rubric:
 When a hard criterion (1-4) fails, FIX the design (re-place the threat onto the path / adjust the number / fill the missing value) — run the bounded <=2 self-revise; NEVER weaken the design to pass (don't delete the threat, don't relax winCondition). If still failing after 2 revises, emit verdict.result="DESIGN_FAILED" with the criterion + numbers (routes back to W1).
 
 Write exactly two files under ${PROJECT}/spec/: blueprint.json (the hardened, frozen design — the new single source of truth; valid against packages/skills/verify-design/blueprint.schema.json) and DESIGN_REVIEW.md (the human-readable verdict + the math trail). Then return the blueprint object as your structured result (incl. the milestones, hardened) and stop. Reason with LOW temperature — this is feasibility MATH + a fixed rubric, not creativity.`,
-    contract({ artifacts: ['spec/blueprint.json', 'spec/DESIGN_REVIEW.md'], owns: ['spec/**'] })),
+    contract({ artifacts: ['spec/blueprint.json', 'spec/DESIGN_REVIEW.md'], owns: ['spec/**'], readScope: [PROJECT, 'packages/skills/verify-design'] })),
   { label: 'VERIFY-1 design', phase: 'VERIFY-1 Design', schema: BLUEPRINT_SCHEMA }
 )
 
@@ -377,7 +382,7 @@ const w2 = await agent(
 5. Ensure ${PROJECT}/src/main.ts exposes window.__GAME__ per template-contract.md (ready/status/scene/player/score/entities + archetype extras + snapshot()/commands). If absent, add the thin read-only adapter (IDs+primitives, never raw Phaser objects; status normalized; score from registry).
 6. Run \`npm run build\` in ${PROJECT}. It MUST exit 0. Fix only scaffold-level breakage; do NOT tighten tsconfig. If it cannot be made green, record the error in MEMORY.md and return status:"failed" — NEVER report success on a red build.
 Do not implement game logic, levels, or assets. Return the status receipt.`,
-    contract({ artifacts: ['STRUCTURE.md', 'index.json'], owns: ['**'], note: 'W2 scaffolds the whole project under the project dir; it owns everything UNDER it but must write nothing OUTSIDE it.' })),
+    contract({ artifacts: ['STRUCTURE.md', 'index.json'], owns: ['**'], readScope: [PROJECT, 'packages/skills/scaffold', 'templates'], note: 'W2 scaffolds the whole project under the project dir; it owns everything UNDER it but must write nothing OUTSIDE it.' })),
   { label: 'W2 scaffold', phase: 'W2 Scaffold', schema: SCAFFOLD_RESULT_SCHEMA }
 )
 
@@ -416,7 +421,7 @@ Mode = placeholder by DEFAULT. Use gemini ONLY if mode:gemini was requested AND 
 For EVERY slot in index.json.slots[]: produce a correctly-dimensioned file under ${PROJECT}/public/assets/ (sprites/images/tiles/backgrounds/audio by type) per the skill. Placeholder = legible greybox (deterministic color + label + dims, transparent where the type needs it). Gemini = gemini-2.5-flash-image via raw REST with the type+archetype-conditioned prompt, magenta chroma-key + sharp trim/contain-resize for sprites, pixel-snap if pixelArt, style-anchored to the first sprite; degrade any failed slot to a placeholder. NEVER block on audio (placeholder WAV).
 
 Then: (a) write back ONLY each filled slot's path+status into ${PROJECT}/index.json (keys/order untouched, one atomic rewrite, re-validate against packages/skills/scaffold/index.schema.json); (b) write ${PROJECT}/ASSETS.md in full per the skill (valid against packages/skills/assets/assets.schema.json); (c) append quirks/degradation to ${PROJECT}/MEMORY.md. Do NOT write src/**, spec/**, tilemap JSON, or any new slot/key. Empty slots:[] -> write ASSETS.md note and stop. Return the status receipt.`,
-    contract({ artifacts: ['ASSETS.md'], owns: ['public/assets/**', 'ASSETS.md', 'index.json', 'MEMORY.md'] })),
+    contract({ artifacts: ['ASSETS.md'], owns: ['public/assets/**', 'ASSETS.md', 'index.json', 'MEMORY.md'], readScope: [PROJECT, 'packages/skills/assets', 'packages/skills/scaffold'] })),
   { label: 'W3 assets', phase: 'W3 Assets', schema: ASSETS_RESULT_SCHEMA }
 )
 
@@ -484,7 +489,7 @@ POPULATE window.__GAME__ FROM REAL STATE: score via game.registry.set('score',n)
 THE NO-INVENTION RULE: if the blueprint is MISSING a number you need (a coordinate, a speed, a respawn target) or is internally contradictory, DO NOT invent or guess it — that is a design decision you are forbidden to make. HALT: record the gap in MEMORY.md, write the specifics, and return status:"failed" with reason "blueprint underspecified: <what>" so it routes back to VERIFY-1. Inventing a missing design value is the original sin this redesign removes.
 
 BUILD-HEALTH: run npm run build in ${PROJECT}; on failure fix the ROOT CAUSE (skill's known-failure table); bounded ~5 attempts; never delete/stub template files or loosen tsconfig. Tick the TODO-W4 in STRUCTURE.md, append terse quirks to MEMORY.md. Build exactly ${mid} verbatim, build green, stop. Return the status receipt.`,
-      contract({ artifacts: [], owns: ['src/**', 'STRUCTURE.md', 'MEMORY.md'], note: 'W4 EXECUTE has no fixed required filename (game-specific scenes); DRIVER-OWNS only. Builds the frozen blueprint verbatim; a missing blueprint number => status:"failed" (escalate), never invented.' })),
+      contract({ artifacts: [], owns: ['src/**', 'STRUCTURE.md', 'MEMORY.md'], readScope: [PROJECT, 'packages/skills/implement-milestone', 'packages/skills/scaffold'], note: 'W4 EXECUTE has no fixed required filename (game-specific scenes); DRIVER-OWNS only. Builds the frozen blueprint verbatim; a missing blueprint number => status:"failed" (escalate), never invented.' })),
     { label: `W4 execute ${mid}`, phase: 'W4 Execute', schema: IMPLEMENT_RESULT_SCHEMA }
   )
 
@@ -501,7 +506,7 @@ Emit the VERBATIM marker: "VALIDATION_PASSED: ${mid} all N checks passed (fideli
 On FAILED run the BOUNDED <=3-cycle self-fix (harness-enforced counter): CLASSIFY the failure. An IMPLEMENTATION BUG (build != blueprint: a dropped tunable, status set at the wrong point, a mechanic keyed to a literal or to the driver's radius, a faked RESPAWN) => EDIT src/** GAME CODE ONLY to make the REAL behavior match the frozen blueprint; re-build; re-run ALL gates incl. perturbation. A genuine DESIGN PROBLEM (the frozen blueprint itself is wrong/unwinnable even when built faithfully) => DO NOT fix here: write ${PROJECT}/verify/escalations.${mid}.json and emit "VALIDATION_FAILED: design escalation — <one line>" (routes to VERIFY-1, NOT the executor). ANTI-REWARD-HACK (absolute): the fix touches src/** game code ONLY — NEVER spec/blueprint.json, the referenceSolution, the acceptanceCriteria, spec/gdd.json, the __GAME__ hook, the harness, or perturbation-grammar.md; the oracle is immutable; never widen a declaredRange.
 
 Write ${PROJECT}/verify/report.${mid}.json (PER-MILESTONE, NEVER overwrite a prior milestone — schema packages/skills/verify/report.schema.json, extended: fidelity[]/completability/invariants[]/perturbation/escalation?) + screenshots. If you edited src/**, re-run prior milestones' fidelity once (regression guard). Return the marker receipt. The marker is the gate.`,
-      contract({ artifacts: [`verify/report.${mid}.json`], owns: ['src/**', 'verify/**', 'MEMORY.md'] })),
+      contract({ artifacts: [`verify/report.${mid}.json`], owns: ['src/**', 'verify/**', 'MEMORY.md'], readScope: [PROJECT, 'packages/skills/verify', 'packages/skills/scaffold', 'packages/verify'] })),
     { label: `VERIFY-2 ${mid}`, phase: 'VERIFY-2 QA', schema: VERIFY_RESULT_SCHEMA }
   )
 
