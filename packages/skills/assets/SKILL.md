@@ -28,7 +28,7 @@ design, written by W1) — and you produce, for EVERY slot:
 
 You have **two modes**:
 - **`placeholder` (the v1 DEFAULT):** programmatic greybox art — legible, correctly-dimensioned,
-  transparent-where-appropriate, color-coded + labelled. **Zero external API, no key, no network.**
+  transparent-where-appropriate, color-coded + role-shaped (NO text baked into any texture). **Zero external API, no key, no network.**
   This is what makes the game RENDER so W5 can verify mechanics without waiting on real art.
 - **`gemini` (a clean TOGGLE):** real sprites via `gemini-2.5-flash-image` ("Nano Banana"). Same
   manifest output. Requires an API key; **degrades gracefully to `placeholder` per-slot** if the
@@ -138,15 +138,27 @@ transparency"; [E] Phaser Loader per-type load calls; [contract] index.schema.js
 > **Doctrine:** placeholders are **greybox art** — primitives that let you test mechanics before
 > real art exists, the industry-standard "whitebox/greybox" practice. But anonymous grey rects are
 > hard to read in a screenshot; make them **LEGIBLE**: a **distinct color per slot** (deterministic
-> from the key, so the same entity is always the same color) + a **baked-in text label** (the slot
-> key) + correct DIMS + transparency where the type needs it. This makes W5's screenshot/VLM verdict
-> meaningful and entities visually distinguishable. _([E] Roblox greybox "apply distinct placeholder
+> from the key, so the same entity is always the same color) + a **distinct ROLE SILHOUETTE** (shape,
+> below) + correct DIMS + transparency where the type needs it. **NEVER bake text into the texture**
+> — no slot key, no frame name, no watermark: the Preloader loads these PNGs as the live game art, so
+> any typed name rides the player's frame (and mirror-flips with facing) — debug scaffolding leaking
+> into the production frame (human verdict, frog1 run). Color + silhouette carry identity for BOTH
+> the player and W5's advisory screenshot/VLM judge; names belong ONLY in ASSETS.md provenance, never
+> in pixels. _([E] Roblox greybox "apply distinct placeholder
 > colors to key areas to orient the user"; Unity Learn / ezEngine greybox; [R] r/gamedev "a huge
 > difference that it is not just gray boxes"; [E] Phaser `addFlatColor` placeholder/proxy texture.)_
 
 **Deterministic color:** hash the slot key (or role) → a hue → a saturated, mid-value RGB. Same key
 ⇒ same color across the whole game. Keep a small fixed palette per role as a fallback
 (player=blue, enemy=red, collectible=gold, obstacle=grey, goal=green, tower=teal, projectile=orange).
+
+**Deterministic shape (the role silhouette):** resolve the slot's role (entityIds →
+gdd.entities[].role; else infer from the key) and draw a simple distinguishing silhouette in the
+slot's color — player = rounded capsule; enemy = angular block with a notched/jagged edge;
+collectible = small bright disc with a thin halo ring; goal = hollow arch/ring (border-only);
+obstacle/platform = wide flat bar; projectile = small filled circle; tower = tall rect with a head
+notch; unknown role = plain rounded-rect (the per-key color still distinguishes it). Same role ⇒
+same silhouette family in every run, so judge and player read identity from palette + shape alone.
 
 You may produce the placeholder as a **real PNG on disk** (preferred — gives W5 a file to load and a
 visible screenshot) using `sharp` if available, OR — if `sharp` is absent — leave the slot `pending`
@@ -156,12 +168,13 @@ exist. If you cannot write a PNG (no sharp, no other tool), leave `pending` and 
 (record it). Either way the game renders.
 
 **Per type (dims from the slot; transparent bg = RGBA, alpha 0 outside the shape):**
-- **`sprite` / `image`:** a `width`×`height` transparent PNG with a centered filled rounded-rect in
-  the slot's deterministic color, a ~2px darker border, and the slot key as a small centered label.
+- **`sprite` / `image`:** a `width`×`height` transparent PNG with the slot's ROLE SILHOUETTE (above),
+  centered, filled in the slot's deterministic color with a ~2px darker border — NO text.
   Sprites are isolated (transparent margin). _([E] Phaser `addFlatColor` proxy; greybox color-coding.)_
 - **`animation`:** a sprite SHEET — `frameW = width`, `frameH = height`, laid out as a horizontal
   strip of `frames.length` cells (total `width*frames.length × height`). Each cell = the sprite
-  placeholder, **tinted by a per-frame value shift** + the frame name labelled, so frames are
+  placeholder, **tinted by a per-frame value shift** (±0.15–0.2; optionally ≤3px corner pips, frame
+  i ⇒ i dots — NEVER the frame name as text), so frames are
   distinguishable and `load.spritesheet(slot, path, {frameWidth:width, frameHeight:height})` parses
   cleanly. Uniform cells, no spacing/margin. _([repo] OpenGame animation = N frames; [E] Phaser
   spritesheet uniform-frame requirement.)_
@@ -169,8 +182,8 @@ exist. If you cannot write a PNG (no sharp, no other tool), leave `pending` and 
   color with a subtle inset border so tiles are visible when laid in a grid. POT helps WebGL wrap.
   _([E] Phaser non-POT only supports CLAMP wrap; tilesets often tile → prefer POT.)_
 - **`background`:** a full `width`×`height` (default `screenSize`, 1152×768) **opaque** PNG — a soft
-  vertical gradient or flat muted fill (NOT transparent — backgrounds fill the frame). No label
-  needed, or a faint corner watermark of the key. _([repo] gameforge backgrounds = opaque `cover`.)_
+  vertical gradient or flat muted fill (NOT transparent — backgrounds fill the frame). NO label and
+  NO watermark — backgrounds carry no text at all; the key lives in ASSETS.md. _([repo] gameforge backgrounds = opaque `cover`.)_
 - **`audio`:** a short **valid WAV** — silence (~0.3 s) or a simple synth blip — so `load.audio(slot,
   path)` succeeds and the game never errors on a missing sound. Audio has a **guaranteed** fallback
   and NEVER blocks the run. _([repo] OpenGame audio Strategy-3 procedural fallback.)_
@@ -290,10 +303,10 @@ ALWAYS IN FULL. Format (commit this shape; also schematized in `assets.schema.js
 | slot (key) | type | path | dims | status | mode | provider/technique | description |
 |---|---|---|---|---|---|---|---|
 | player | sprite | sprites/player.png | 64x64 | generated | gemini | gemini-2.5-flash-image + chroma-key | side-view hero facing right |
-| coin | sprite | sprites/coin.png | 32x32 | placeholder | placeholder | greybox rect+label (gold) | top-down coin |
+| coin | sprite | sprites/coin.png | 32x32 | placeholder | placeholder | greybox disc+halo (gold, collectible) | top-down coin |
 | tile_ground | tileset | tiles/tile_ground.png | 64x64 | placeholder | placeholder | flat tile (grey) | tileable ground |
 | bg_level | background | backgrounds/bg_level.png | 1152x768 | placeholder | placeholder | gradient fill | distant sky |
-| run | animation | sprites/run.png | 64x64 ×6 | placeholder | placeholder | 6-frame labelled strip | run cycle |
+| run | animation | sprites/run.png | 64x64 ×6 | placeholder | placeholder | 6-frame strip (value-shift) | run cycle |
 | sfx_jump | audio | audio/sfx_jump.wav | 0.3s | placeholder | placeholder | silent wav | jump sound |
 
 ## How the engine loads each (key → loader call)

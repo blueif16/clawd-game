@@ -86,7 +86,7 @@
           },
           "technique": {
             "type": "string",
-            "description": "Provenance: e.g. 'gemini-2.5-flash-image + chroma-key + trim', 'greybox rect+label (gold)', 'flat tile (POT)', '6-frame labelled strip', 'silent wav', 'Preloader generateTexture'."
+            "description": "Provenance: e.g. 'gemini-2.5-flash-image + chroma-key + trim', 'greybox disc+halo (gold, collectible)', 'flat tile (POT)', '6-frame strip (value-shift)', 'silent wav', 'Preloader generateTexture'."
           },
           "description": {
             "type": "string",
