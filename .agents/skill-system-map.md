@@ -144,12 +144,16 @@ WORKABLE GAME from the producing path alone, NOT leaning on the verify flow. The
 | Node | Sweep outcome | Edit (skillsys) | Parked / folds-in here |
 |---|---|---|---|
 | W0 Classify | ✅ **PASS** (no fix) — blind not needed (clean diagnosis) | — | coverage gap: add a genre-word TRAP prompt (label≠physics) in a later sweep |
-| W1 Spec | ✅ **PASS** — PASS-WITH-NITS → fixed → blind judge PASS | `failModel` machine-readable (`09c5742`) | exit-placement reach (~220px/jump vs x≈1050) → **W4** fidelity; `failModel` CONSUMER (HUD seam) → **W2** |
-| VERIFY-1 Design | ⏭ pass-through (NOT validated this sweep) | — | — |
-| W2 Scaffold | ▶ **NEXT** | — | hud-healthbar CONSUMER (HUD keys off `failModel`, read from gdd) + broad-playability D2 objective-legibility fold in |
+| W1 Spec | ✅ **PASS** — PASS-WITH-NITS → fixed → blind judge PASS | `failModel` machine-readable (`09c5742`) | exit-placement reach (~220px/jump vs x≈1050) → **W4** fidelity; `failModel` CONSUMER (HUD seam) → **W2** (closed `b9d9cbc`); parked: progress-to-win readout (`score/N`) needs a machine-readable win-gate target W1 does not yet declare — **W1**'s half of D2 |
+| VERIFY-1 Design | ⏭ pass-through (NOT validated this sweep) | — | parked (verify-node owner, deferred per sweep scope): VERIFY-1 drops `meta.failModel` at the gdd→blueprint hand-off (blueprint.meta lacks it though gdd declares it and W2's prompt names the blueprint the single source of truth; W2's `blueprint.meta.failModel ?? gdd.meta.failModel` fallback covers meanwhile) — `verify-design` SKILL + blueprint schema |
+| W2 Scaffold | 🛠 **PASS-WITH-NITS** → fix applied (`b9d9cbc`) → re-run pending | failModel + objective carried into gameConfig; HUD keyed off the fail-model (`b9d9cbc`) | hud-healthbar CONSUMER + broad-playability D2 (objective legibility) — both reproduced in nv1, both closed by `b9d9cbc` |
 | W3 Assets | ⏳ pending | — | asset-visuals (baked name-labels; fixture L83/L91 also move) folds in |
 | W4 Execute M1 | ⏳ pending (M1 only) | — | win-completion build seam + respawn-as-live-reset (D5) + spatial coherence (D3) fold in |
 | VERIFY-2 QA | ⏸ DEFERRED (verify nodes ignored this sweep) | — | — |
+
+_NOTE (2026-06-12, per human direction): the sweep is now PARALLELIZED — the W3 + W4-M1 baselines run in
+lane `out/nv1-w34` on the PRE-W2-fix scaffold clone (caveat recorded: those baselines are NOT on top of the
+post-fix artifact chain; the `b9d9cbc` fix lands for every future scaffold and the W2 re-run is pending)._
 
 ## Product code (built against the skill contracts)
 1. **Genre templates (build-plan Phase 1).** `templates/core/` (shared engine: `hook.ts` = the
@@ -415,6 +419,14 @@ session can retrace the evidence behind any edit. A claim with no doc on disk is
   100/100 bar on a respawn game) + nv1 "Crystal Chasm" repeating the inert-maxHealth setup. (skillsys
   09c5742 skillsys(write-gdd); supporting: `_prior-runs/frog1-postmortem/hud-healthbar.md`,
   `_prior-runs/nv1/w1-diagnosis.md`.)
+- 2026-06-12 — `scaffold/template-contract.md` §4 + `scaffold/SKILL.md` §3.1 + `templates/core`
+  UIScene/TitleScreen + template gameConfig seeds — **failModel-consumer + objective legibility (the
+  controlsHelp twin).** gameConfig now carries failModel + objective verbatim from the spec; the HUD renders
+  ONLY the fail-model's live resource (health XOR lives XOR none) and the title/HUD surface the one-line GOAL.
+  Trigger: frog1 hud-healthbar consumer half + frog1 D2, both reproduced in nv1 W2 (frozen 1/1 bar on a
+  respawn game; no on-screen objective). (skillsys b9d9cbc skillsys(scaffold); supporting:
+  `_prior-runs/frog1-postmortem/hud-healthbar.md`, `_prior-runs/frog1-postmortem/broad-playability.md` D2,
+  `_prior-runs/nv1/w2-diagnosis.md`.)
 - _(future flaws/fixes append here so repeat-flaws become visible and the next diagnosis starts ahead.)_
 
 ## Stewardship note
