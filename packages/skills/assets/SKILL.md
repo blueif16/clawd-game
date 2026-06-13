@@ -1,6 +1,6 @@
 ---
 name: assets
-description: "W3 ASSETS (Artist, fourth node; PARALLEL lane with W4-M1). Fill the project's public/assets/ for EVERY index.json slot and write the ASSETS.md manifest. Two modes: placeholder (v1 DEFAULT — legible, dimensioned, color-coded greybox art, zero external API) and gemini (TOGGLE — real sprites via gemini-2.5-flash-image, degrades gracefully to placeholder). Depends ONLY on index.json (frozen by W2) + the gdd — never on W4's game code. Writes asset files + ASSETS.md and writes back each slot's path+status PARALLEL-SAFELY. Leans on the template Preloader's placeholder-fill so the game always renders even if W3 lags or fails."
+description: "W3 ASSETS (Artist, fourth node; PARALLEL lane with W4-M1). Fill the project's public/assets/ for EVERY index.json slot and write the ASSETS.md manifest. Two modes: gemini (the DEFAULT/primary — REAL sprites/backgrounds via the gen/ tool, gemini-2.5-flash-image + a LOCAL offline white/plain-bg chroma key) and placeholder (the graceful FLOOR — legible, dimensioned, color-coded greybox art, zero external API — used only when the tool degrades: no key/deps, or per-slot failure). Generate ALL the assets the design references; never down-scope. Depends ONLY on index.json (frozen by W2) + the gdd — never on W4's game code. Writes asset files + _provenance.json + ASSETS.md and writes back each slot's path+status PARALLEL-SAFELY. Leans on the template Preloader's placeholder-fill so the game always renders even if W3 lags or fails."
 version: 1.0.0
 node: W3
 role: Artist
@@ -11,8 +11,9 @@ metadata:
   writes: [public/assets/** (asset files), ASSETS.md, index.json (slot path+status only), MEMORY.md notes]
   schema: assets.schema.json
   contract: ../scaffold/template-contract.md
-  modes: [placeholder, gemini]
-  default-mode: placeholder
+  modes: [gemini, placeholder]
+  default-mode: gemini
+  tool: gen/generate_assets.py
   parallel-with: W4 (first implement milestone)
 ---
 
@@ -26,13 +27,20 @@ design, written by W1) — and you produce, for EVERY slot:
 2. an **`ASSETS.md`** manifest (the produced-asset grounding the rest of the pipeline reads), and
 3. an updated `index.json` row (`path` + `status`), written back **parallel-safely**.
 
-You have **two modes**:
-- **`placeholder` (the v1 DEFAULT):** programmatic greybox art — legible, correctly-dimensioned,
-  transparent-where-appropriate, color-coded + role-shaped (NO text baked into any texture). **Zero external API, no key, no network.**
-  This is what makes the game RENDER so W5 can verify mechanics without waiting on real art.
-- **`gemini` (a clean TOGGLE):** real sprites via `gemini-2.5-flash-image` ("Nano Banana"). Same
-  manifest output. Requires an API key; **degrades gracefully to `placeholder` per-slot** if the
-  key/dependency/generation is unavailable.
+You have **two modes**, and **real generation is the PRIMARY one**:
+- **`gemini` (the DEFAULT/primary path):** **REAL** sprites/backgrounds via the bundled
+  `gen/generate_assets.py` tool (`gemini-2.5-flash-image`, "Nano Banana", + a LOCAL offline chroma
+  key). **Attempt this for EVERY non-audio slot, every run** — image generation is effectively free,
+  so generate whatever the design references; never simplify, skip, or down-scope an asset (§5).
+- **`placeholder` (the graceful FLOOR / fallback):** programmatic greybox art — legible,
+  correctly-dimensioned, transparent-where-appropriate, color-coded + role-shaped (NO text baked into
+  any texture). **Zero external API, no key, no network.** This is the safety net: it runs when the
+  tool **exits 3** (no key / no deps), or for any **per-slot** generation failure, and it is what
+  guarantees the game RENDERS so W5 can verify mechanics even on a Pi executor with no key.
+
+**The policy:** real generation is the default; placeholder is the FLOOR you fall to, never the
+target. The game must ALWAYS render (placeholder floor + template Preloader) regardless of which path
+each slot took.
 
 > **THE PARALLEL-SAFETY RULE (read this first — it is load-bearing).** W3 and W4 share **NO file**.
 > W4 writes `src/**` and reads ONLY the stable asset **KEYS** in `index.json` (frozen by W2). W3
@@ -47,8 +55,11 @@ You have **two modes**:
 
 Your job has exactly six parts, in this order:
 1. **Read** `index.json` (the slots) + `spec/gdd.json` (art style + entity provenance).
-2. **Decide** the mode (placeholder default; gemini only if requested AND key AND sharp present).
-3. **Fill** every slot → a file under `public/assets/<subdir>/<slot>.<ext>` by `type`.
+2. **Attempt REAL generation** for every non-audio slot by running the `gen/generate_assets.py` tool
+   (§5) — this is the default. It fills slots `generated` and writes `_provenance.json`.
+3. **Fill the FLOOR**: write a legible placeholder (§4) for every slot the tool did NOT mark
+   `generated` (it exited 3 / no key / no deps, or that slot failed) and for audio — so EVERY slot
+   has coverage. Never skip a slot.
 4. **Write back** each slot's `path`+`status` into `index.json` (parallel-safe; KEYS untouched).
 5. **Write** `ASSETS.md` (the produced manifest; valid against `assets.schema.json`).
 6. **Note** quirks/fallbacks in `MEMORY.md`.
@@ -81,34 +92,47 @@ Read `index.json` at the project root (validates against `../scaffold/index.sche
 Read `gdd.meta.artStyle` (e.g. "pixel art, bright, side-view") — the **global style anchor** for
 every prompt. `"placeholder"` is a valid artStyle (forces/confirms placeholder mode). Read
 `gdd.entities[]` only to fill a missing slot `description` (via `entityIds`). Also read
-`renderConfig.pixelArt` from `src/gameConfig.json` (or infer from artStyle containing "pixel") to
-decide pixel-snap (§5.4).
+`renderConfig.pixelArt` from `src/gameConfig.json` (or infer from artStyle containing "pixel"). The
+`gen/` tool reads the artStyle (passed via `--style`) and bakes pixel-art look into its prompts; the
+template's point filtering carries the snap at render time. Pass the style through and trust the tool.
 
 You do NOT design assets the GDD doesn't ask for. Every file you write traces to an `index.json`
 slot. NEVER invent a slot or a key.
 
 ---
 
-## 2. DECIDE THE MODE
+## 2. THE PATH (real generation is the DEFAULT; placeholder is the floor)
 
 ```
-mode = placeholder   # the v1 DEFAULT
-if (requested gemini)            # arg `mode:gemini` OR env W3_ASSET_MODE=gemini OR W3 prompt says gemini
-   and (GEMINI_API_KEY or GOOGLE_AI_API_KEY resolves)
-   and (sharp is importable)
-   and (gdd.meta.artStyle != 'placeholder'):
-       mode = gemini
-else if (gemini was requested but a condition failed):
-       mode = placeholder   # GRACEFUL DEGRADATION — record the reason once in ASSETS.md + MEMORY.md
+# 1. ALWAYS attempt real generation first (the tool resolves its own key + deps; §5).
+run gen/generate_assets.py --index <project>/index.json --gdd <project>/spec/gdd.json
+                            --out <project>/public/assets --style <gdd.meta.artStyle>
+exit 0  -> tool RAN. Some slots are now `generated` (+ _provenance.json). mode = gemini.
+exit 3  -> DEGRADE: no key resolved / deps absent. NOTHING generated. mode = placeholder (the FLOOR).
+exit 2  -> bad invocation (fix the args/paths and retry once).
+
+# 2. Fill the FLOOR for every slot the tool did NOT mark `generated` (and ALL audio).
+for slot in index.json.slots where status != 'generated':  write a placeholder (§4)
+# degraded:true iff any non-audio slot fell back to placeholder.
 ```
 
-- **Placeholder is the floor and the fallback.** It needs zero key/network/deps and ALWAYS runs
-  (Pi-safe). _([repo] gen-image graceful "no key" degradation, but our target is placeholder, a
-  complete mode, not an error; [E] greybox prototyping is a first-class workflow.)_
-- In **gemini mode**, degradation is **per-slot**: any slot that fails to generate falls to a
-  placeholder for that slot, so the run still fills EVERY slot. _([repo] gameforge `generateBatch`
-  per-asset try/catch; [Y]/[E] transparency/quality is unreliable — never let one slot abort.)_
-- Record the chosen mode (and any degradation reason) in `ASSETS.md` header + `MEMORY.md`.
+- **Real generation is the default and you attempt it for EVERY non-audio slot, every run.** Image
+  generation is effectively free — generate whatever the design references. Never gate it behind a
+  flag, never simplify it away. _([repo] gen/ tool default `--mode gemini`; gameforge real-asset pipeline.)_
+- **The spec→asset policy (no silent down-scoping):** every entity/slot the design (`index.json` ↔
+  `gdd.entities[]`) references gets a REAL asset generated to MATCH its description. You never skip a
+  slot, never collapse two distinct entities onto one art, never "simplify and avoid" a generation.
+  A slot only lands on placeholder because the tool *degraded* (exit 3 / per-slot failure) — never
+  because you chose to.
+- **Placeholder is the floor and the fallback, NOT the target.** It needs zero key/network/deps and
+  ALWAYS runs (Pi-safe) — so a Pi executor without the key/deps still ships a fully-rendering game.
+  _([repo] gen/ exit-3 degrade; [E] greybox prototyping is a valid floor, not the goal.)_
+- **Degradation is per-slot.** The tool isolates failures: any slot it cannot generate is left
+  `pending`/un-flipped and you fill it with a placeholder, so the run still covers EVERY slot.
+  _([repo] gen/ per-batch try/catch; gameforge `generateBatch` per-asset isolation.)_
+- Record the effective mode (gemini if the tool ran, else placeholder) and any degradation reason in
+  `ASSETS.md` header + `MEMORY.md`. `mode:gemini` + `degraded:true` means real gen ran but some slots
+  fell back.
 
 ---
 
@@ -133,7 +157,7 @@ transparency"; [E] Phaser Loader per-type load calls; [contract] index.schema.js
 
 ---
 
-## 4. PLACEHOLDER MODE (the v1 DEFAULT) — legible greybox per type
+## 4. PLACEHOLDER MODE (the graceful FLOOR) — legible greybox per type
 
 > **Doctrine:** placeholders are **greybox art** — primitives that let you test mechanics before
 > real art exists, the industry-standard "whitebox/greybox" practice. But anonymous grey rects are
@@ -161,11 +185,12 @@ notch; unknown role = plain rounded-rect (the per-key color still distinguishes 
 same silhouette family in every run, so judge and player read identity from palette + shape alone.
 
 You may produce the placeholder as a **real PNG on disk** (preferred — gives W5 a file to load and a
-visible screenshot) using `sharp` if available, OR — if `sharp` is absent — leave the slot `pending`
-and let the **template Preloader** programmatically fill it (`generateTexture`/`addFlatColor`). Both
-are valid; **prefer the on-disk PNG** so the slot reaches `placeholder` status and the manifest/file
-exist. If you cannot write a PNG (no sharp, no other tool), leave `pending` and rely on the Preloader
-(record it). Either way the game renders.
+visible screenshot) using any available image tool — the `gen/` venv's PIL/numpy (already provisioned
+for real gen), Python's stdlib, or `sharp`/node-canvas if present — OR, if no image library is
+available, leave the slot `pending` and let the **template Preloader** programmatically fill it
+(`generateTexture`/`addFlatColor`). Both are valid; **prefer the on-disk PNG** so the slot reaches
+`placeholder` status and the manifest/file exist. If you cannot write a PNG at all, leave `pending`
+and rely on the Preloader (record it). Either way the game renders.
 
 **Per type (dims from the slot; transparent bg = RGBA, alpha 0 outside the shape):**
 - **`sprite` / `image`:** a `width`×`height` transparent PNG with the slot's ROLE SILHOUETTE (above),
@@ -181,7 +206,7 @@ exist. If you cannot write a PNG (no sharp, no other tool), leave `pending` and 
 - **`tileset`:** a `width`×`height` (use POT-friendly dims, e.g. 64) opaque flat tile in the slot
   color with a subtle inset border so tiles are visible when laid in a grid. POT helps WebGL wrap.
   _([E] Phaser non-POT only supports CLAMP wrap; tilesets often tile → prefer POT.)_
-- **`background`:** a full `width`×`height` (default `screenSize`, 1152×768) **opaque** PNG — a soft
+- **`background`:** a full `width`×`height` (default `screenSize`, 1280×720) **opaque** PNG — a soft
   vertical gradient or flat muted fill (NOT transparent — backgrounds fill the frame). **FULLY opaque
   across the ENTIRE canvas, INCLUDING effect regions** — bake glows/light-spills/auras as opaque color
   blends toward the effect color, never via alpha: any transparent pixel in a background renders
@@ -196,81 +221,75 @@ could not write a file and are relying on the Preloader).
 
 ---
 
-## 5. GEMINI MODE (the TOGGLE) — real sprites, with graceful degradation
+## 5. REAL GENERATION (the DEFAULT) — run the `gen/` tool, then fill the floor
 
-Same outputs (file per slot + `ASSETS.md` + write-back); real art instead of greybox. Per slot:
+Real art is produced by the **self-contained `gen/generate_assets.py` tool** (see
+`gen/README.md` for the full CLI). You do NOT hand-write the Gemini REST call, the chroma key, or the
+resize — the proven tool owns all of it. Your job is to **invoke it**, then **placeholder the floor**
+for whatever it left, then write the manifest. Run it ONCE per project (it processes every slot):
 
-### 5.1 The call (raw REST — no SDK; Pi-portable)
-`POST https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent`
-- header `x-goog-api-key: <GEMINI_API_KEY|GOOGLE_AI_API_KEY>`; `content-type: application/json`.
-- `model` = env `GEMINI_IMAGE_MODEL` else **`gemini-2.5-flash-image`** (the GA "Nano Banana"; upgrade
-  drop-ins: `gemini-3.1-flash-image` = Nano Banana 2, `gemini-3-pro-image` = Nano Banana Pro). _([repo]
-  gen-image DEFAULT_MODEL; [E] ai.google.dev model ids.)_
-- body `{ "contents":[{ "parts":[ {"text": <prompt>}, ...<styleAnchor refs as {"inlineData":{"mimeType":"image/png","data":<b64>}}> ] }], "generationConfig":{ "responseModalities":["IMAGE"] } }`.
-- Decode the image from `candidates[0].content.parts[].inlineData.data` (base64 → Buffer). If no
-  image part (blocked / `promptFeedback.blockReason` / empty) → **this slot degrades to placeholder.**
-  _([repo] gen-image `callGemini`; gameforge `extractImage`.)_
-- **Concurrency ≤ 2**, small delay between calls (rate limits). Per-slot try/catch. _([repo]
-  gameforge `MAX_CONCURRENCY=2`, 6 s delay, per-asset failure isolation.)_
-
-### 5.2 The prompt (style + type + archetype conditioned)
-Build a structured prompt (the gameforge skeleton):
+```bash
+packages/skills/assets/gen/.venv/bin/python packages/skills/assets/gen/generate_assets.py \
+  --index <projectDir>/index.json --gdd <projectDir>/spec/gdd.json \
+  --out   <projectDir>/public/assets --style "<gdd.meta.artStyle>"
+# --mode defaults to gemini; add --model <id> only to override gemini-2.5-flash-image.
 ```
-Create a 2D game asset (<type>):
-- Style: <gdd.meta.artStyle>
-- Dimensions: <width>x<height> pixels
-- Description: <slot.description>
-- View: <side-view | top-down | front bust>      # from index.json.archetype
-<type-specific constraints, below>
-```
-**Type-specific (the isolation/fill rules that make it engine-ready):** _([repo] gameforge
-`buildPrompt`; [E] roboticape lessons.)_
-- **sprite / image / animation-base:** "Generate ONLY the subject, nothing else. The subject FILLS
-  the frame. Completely isolated on a **solid flat magenta `#FF00FF`** background with even margin on
-  all sides. NO ground, shadows, scene elements, borders, or other characters. Clean edges suitable
-  for a game sprite. **CRITICAL: the background must be solid `#FF00FF` with NO gradients, NO noise,
-  NO shadows.**" (Use `side-view`/`top-down`/`front bust` per archetype.) _([repo] gameforge sprite
-  block + gen-image magenta; [E] roboticape "CRITICAL + exact hex + ban gradients", even margin.)_
-- **background:** "BACKGROUND ONLY — distant scenery/sky/environment. Do NOT include characters,
-  players, enemies, platforms, collectibles, or UI. Fill the entire canvas edge-to-edge. Fully
-  opaque." (No chroma key.) _([repo] gameforge/OpenGame background block.)_
-- **tileset:** "A seamless tileable surface texture filling the entire canvas. NO characters, NO
-  grid lines, NO borders/padding, NO text/labels, flat 2D front view, consistent lighting." _([repo]
-  OpenGame tileset forbidden-list.)_
-- **audio:** **not generated in v1 gemini mode** — audio degrades to the placeholder WAV (§4). Real
-  audio gen is out of v1 scope. _([repo] OpenGame audio multi-strategy is heavy; research §5 open Q.)_
 
-### 5.3 Transparency + dims post-process (sharp — MANDATORY for sprites)
-Gemini does **NOT** output a real alpha channel — it draws the chroma color, so you MUST key it out.
-_([E] roboticape "cannot generate true transparency, always post-process"; [Y] Chong-U "Nano Banana 2
-does not support transparency".)_ With `sharp`:
-1. **Chroma key (sprites/animation only):** sample the 4 corner pixels; find the dominant corner
-   color (≥3/4 match within a per-channel tolerance ~30); set every matching pixel's alpha to 0.
-   (Auto-detect the actual color — the model emits near-magenta, not exact `#FF00FF`.) _([repo]
-   gameforge `removeBackground`; [E] kingbootoshi corner auto-detect; upgrade to HSV if fringe shows.)_
-2. **Trim** transparent edges (`sharp.trim`), then **extend**/pad back to exact slot dims with
-   transparent background — so the subject is centered at the requested size. _([E] roboticape
-   "auto-trim then resize"; [E] sharp `trim`+`extend`.)_
-3. **Resize to slot dims:** `resize(width, height, { fit, background:{r:0,g:0,b:0,alpha:0}, kernel })`
-   — **`fit:'contain'`** for sprites (never crop the subject; transparent letterbox), **`fit:'cover'`**
-   for backgrounds (fill, no bars). **Pass BOTH width and height** (or width + `height:null`) or
-   nearest-kernel blurs. _([repo] gameforge contain/cover; [E] sharp resize + issue #4158 gotcha.)_
-4. Save PNG (alpha preserved).
+### 5.1 What the exit code tells you (branch on it)
+| exit | meaning | what you do |
+|---|---|---|
+| `0` | tool ran; each non-audio slot is now `generated` or left un-flipped (per-slot degrade) | placeholder every slot still not `generated` (§4) + all audio; `mode:gemini` |
+| `3` | **degrade to placeholder** — no key resolved / deps absent. Nothing generated, no crash. | placeholder **every** slot (§4); `mode:placeholder`; record the reason once |
+| `2` | bad invocation (e.g. index.json path wrong) | fix the `--index/--gdd/--out` paths and retry once; if it persists, fall to full placeholder |
 
-### 5.4 Pixel-snap (only when `renderConfig.pixelArt` / artStyle says "pixel")
-Do NOT ask the prompt for pixel-perfection — it won't deliver (sub-pixel noise, 6-vs-7px). Instead:
-generate large, then **nearest-downscale to the logical pixel size, then nearest-upscale to display
-dims** (`kernel:'nearest'` both ways), optionally color-quantize. Rely on the template's point
-filtering. _([E] spritecook "prompt for style, fix the grid after"; [Y] Chong-U pixel-snap each frame.)_
+A `0` exit with some slots un-generated is **normal and safe** — those fall to your placeholder
+floor. The tool **never aborts the whole run for one slot.** _([repo] gen/ exit-code contract.)_
 
-### 5.5 Style consistency (style anchor)
-The **first sprite you successfully generate becomes the style anchor**: pass its PNG as an inline
-reference part on every subsequent sprite call ("Match the visual style of the reference image"), so
-the game's sprites stay coherent. Gemini accepts up to 14 reference images. _([repo] gameforge
-`setStyleAnchor`/`generateBatch`; [E] Gemini character-consistency + 14-ref capability.)_
+### 5.2 The API key (the tool resolves it — you do NOT handle the secret)
+The tool resolves the key itself, in order: env `GOOGLE_API_KEY` → env `GEMINI_API_KEY` → the
+**gitignored** repo-root file `.env.assets` (4 dirs up from the tool). If none resolves it exits `3`.
+**Never print, echo, log, or commit the key**; never write it into any tracked file. On a Pi executor
+with no key/deps the tool simply exits `3` and you ship the placeholder floor — real generation is a
+clean toggle, never a hard requirement. _([repo] gen/ `resolve_api_key`; `.env.assets` is `.gitignore`d.)_
 
-Set `status:'generated'` for every slot you successfully produce this way; degrade the rest to
-placeholder (`status:'placeholder'`).
+### 5.3 The batch policy (what the tool does per type — for your manifest provenance)
+You don't implement this, but state it accurately in `ASSETS.md` (the tool's real behavior — NOT a
+magenta chroma key, NOT `sharp`): _([repo] gen/ `generate_assets.py`, `image_ops.py`, `prompt_library.py`.)_
+- **`sprite` / `image`:** small cut-out slots are **BATCHED into grids** (≤9 cells per Gemini call,
+  split by count: 1→1×1, ≤4→2×2, ≤9→3×3, more → multiple calls), one call per grid → split into
+  cells → **LOCAL offline chroma key** (corner-median white/plain-bg detection in PIL/numpy — free,
+  no network bg-removal) → normalize/center → `fit:contain` to exact slot dims → transparent PNG.
+- **`background`:** generated **SEPARATELY** (never batched), a single call at the slot's own nearest
+  supported aspect ratio → `fit:cover` → **fully opaque RGB** (no alpha holes anywhere, incl. effect
+  regions — a transparent background pixel renders in-game as a hole to the clear color).
+- **`animation` (`frames[]`):** the named frames generated as poses of the **same** entity
+  (style-anchored), keyed and assembled into a correctly-dimensioned **horizontal STRIP**
+  `(frames.length × width) × height` — so `load.spritesheet(slot, path, {frameWidth, frameHeight})`
+  parses cleanly. Always ends at the exact strip dims.
+- **`tileset`:** a single seamless tile, fit to slot dims, opaque.
+- **`audio`:** **NOT generated** by the tool — it stays the SKILL's placeholder WAV (§4), guaranteed,
+  never blocks the run.
+
+**Style consistency:** the first successfully generated sprite/animation sheet becomes the tool's
+**style anchor**, passed as an inline reference on every later call so the whole set stays coherent.
+
+### 5.4 Provenance — the seed of a reusable asset library
+The tool writes **`public/assets/_provenance.json`** — the prompt, model, date, and dims per
+generated slot. Treat this as the durable record of HOW each real asset was made and the **seed of a
+reusable asset library** (a future run can re-derive or reuse a slot from its provenance). It is part
+of W3's real-generation output; surface it in `ASSETS.md` Notes. _([repo] gen/ `_provenance.json` writer.)_
+
+### 5.5 After the tool: fill the floor, then claim only what the bytes show
+The tool already wrote each generated slot's `path`+`status:'generated'`+refined dims into
+`index.json` (parallel-safely; `manifest === bytes` — for `animation`, file width === `frames.length ×
+width`). **Do not re-do that for generated slots.** Then:
+- Write a **placeholder (§4)** for every slot still not `generated` and for ALL audio → `status:'placeholder'`.
+- **Verify-then-claim still governs every row** (§6b): read back each generated PNG's header/alpha
+  before asserting its dims/opacity/transparency in `ASSETS.md` — never assert a real-gen property
+  from intent. **De-label holds:** real sprites carry NO baked text/labels/watermarks in pixels
+  either; names live ONLY in `ASSETS.md` provenance.
+
+Set `status:'generated'` for every slot the tool produced; `status:'placeholder'` for the floor.
 
 ---
 
@@ -305,19 +324,20 @@ ALWAYS IN FULL. Format (commit this shape; also schematized in `assets.schema.js
 # Assets — <gdd.meta.title>
 
 > Produced by W3 (Artist). `index.json` = requested slots (W2); this = produced assets (W3).
-> Mode: <placeholder|gemini> · Model: <gemini-2.5-flash-image | n/a> · Art style: <gdd.meta.artStyle>
+> Mode: <gemini|placeholder> · Model: <gemini-2.5-flash-image | n/a> · Art style: <gdd.meta.artStyle>
 > Slots: <N total> — <g> generated · <p> placeholder · <pend> pending. assetsDir: public/assets/
-> <if degraded:> Note: gemini requested but fell back to placeholder — <reason>.
+> Real generation is the default path (via gen/generate_assets.py). Provenance: public/assets/_provenance.json.
+> <if degraded:> Note: <slots/run> fell back to placeholder — <reason (tool exit 3: no key/deps · per-slot failure)>.
 
 ## Manifest
 | slot (key) | type | path | dims | status | mode | provider/technique | description |
 |---|---|---|---|---|---|---|---|
-| player | sprite | sprites/player.png | 64x64 | generated | gemini | gemini-2.5-flash-image + chroma-key | side-view hero facing right |
-| coin | sprite | sprites/coin.png | 32x32 | placeholder | placeholder | greybox disc+halo (gold, collectible) | top-down coin |
-| tile_ground | tileset | tiles/tile_ground.png | 64x64 | placeholder | placeholder | flat tile (grey) | tileable ground |
-| bg_level | background | backgrounds/bg_level.png | 1152x768 | placeholder | placeholder | gradient fill | distant sky |
-| run | animation | sprites/run.png | 64x64 ×6 | placeholder | placeholder | 6-frame strip (value-shift) | run cycle |
-| sfx_jump | audio | audio/sfx_jump.wav | 0.3s | placeholder | placeholder | silent wav | jump sound |
+| player | sprite | sprites/player.png | 64x64 | generated | gemini | gemini-2.5-flash-image + local chroma key (gen/ tool) | side-view hero facing right |
+| coin | sprite | sprites/coin.png | 32x32 | generated | gemini | gemini-2.5-flash-image, batched grid + local chroma key | top-down coin |
+| tile_ground | tileset | tiles/tile_ground.png | 64x64 | generated | gemini | gemini-2.5-flash-image, seamless tile, opaque | tileable ground |
+| bg_level | background | backgrounds/bg_level.png | 1280x720 | generated | gemini | gemini-2.5-flash-image, fit:cover, opaque | distant sky |
+| run | animation | sprites/run.png | 64x64 ×6 | generated | gemini | gemini-2.5-flash-image, 6-frame strip (style-anchored) | run cycle |
+| sfx_jump | audio | audio/sfx_jump.wav | 0.3s | placeholder | placeholder | silent wav (audio not generated) | jump sound |
 
 ## How the engine loads each (key → loader call)
 - sprite/image/tileset/background → `this.load.image('<slot>', '<path>')`
@@ -326,7 +346,7 @@ ALWAYS IN FULL. Format (commit this shape; also schematized in `assets.schema.js
 - The template Preloader placeholder-fills any slot still `pending` (textures.exists guard) — the game renders regardless.
 
 ## Notes
-<failed/oversized generations + reason · degradation reason · pixel-snap applied · empty-slots case · anything in MEMORY.md>
+<provenance: public/assets/_provenance.json (prompt/model/date per generated slot) · failed/degraded slots + reason · empty-slots case · anything in MEMORY.md>
 ```
 
 **Verify-then-claim:** an `ASSETS.md` row (or Notes line) may only assert a property — opacity,
@@ -345,17 +365,20 @@ Also append a one-line note per quirk to `MEMORY.md` (degradation, failed slots,
   case; the game still boots.)_
 - **Missing slot `description`** → fall back to the entity description via `entityIds` →
   `gdd.entities[].description`; if still none, prompt from `slot` + `type` + `archetype`. Never skip a slot.
-- **Failed / blocked / empty generation (gemini)** → degrade THAT slot to a placeholder; record the
-  reason in `ASSETS.md` Notes + `MEMORY.md`. Never abort the run; never leave a slot with no coverage
-  (placeholder or Preloader-fill). _([repo] gameforge per-asset try/catch.)_
-- **Oversized / wrong-aspect output** → trim + `fit`-resize to exact slot dims (§5.3); if still
-  unusable, degrade to placeholder. The file on disk MUST match the slot dims.
-- **No API key / sharp unavailable when gemini requested** → whole run falls to placeholder mode;
-  record once in `ASSETS.md` header + `MEMORY.md`. NOT a failure. _([repo] gen-image graceful "no key".)_
-- **Audio slot** → always placeholder WAV in v1 (guaranteed); never block on it.
-- **`sharp` absent in placeholder mode** → write a minimal valid PNG by another available means, or
-  leave the slot `pending` and rely on the Preloader's `generateTexture`/`addFlatColor` (record it).
-  The game still renders.
+- **Per-slot generation failure (tool exit 0, slot un-generated)** → the tool already isolated it and
+  left it un-flipped; you fill THAT slot with a placeholder (§4). Record the reason in `ASSETS.md`
+  Notes + `MEMORY.md`. Never abort the run; never leave a slot with no coverage. _([repo] gen/ per-batch isolation.)_
+- **Tool exit 3 (no key / deps absent)** → the whole run falls to the placeholder floor; record once
+  in `ASSETS.md` header + `MEMORY.md`. NOT a failure — generation is a clean toggle. _([repo] gen/ exit-3 degrade.)_
+- **Tool exit 2 (bad invocation)** → fix the `--index/--gdd/--out` paths and retry once; if it still
+  fails, fall to the full placeholder floor and record why.
+- **Oversized / wrong-aspect output** → the tool already trims + `fit`-resizes to exact slot dims; if
+  a generated file disagrees with the slot dims, refine the write-back so manifest === bytes, or
+  degrade that slot to placeholder. The file on disk MUST match the slot dims.
+- **Audio slot** → always placeholder WAV (the tool never generates audio); never block on it.
+- **No image library available for the placeholder floor** → write a minimal valid PNG by any
+  available means, or leave the slot `pending` and rely on the Preloader's
+  `generateTexture`/`addFlatColor` (record it). The game still renders.
 - **Could not write a real file for a slot** → leave it `pending`, record why; the Preloader covers
   it. A `pending` slot is a SAFE state, never a build break.
 - **NEVER** change a slot KEY, touch `src/**`/`spec/**`, write tilemap/level JSON, or invent a slot.
@@ -376,8 +399,10 @@ slots/keys.
 
 This node is a single `agent()` call over a **bounded, discovered-once list** — `index.json.slots[]`,
 frozen by W2 (the same "scout the work-list, then iterate" pattern as the milestone list; pipeline
-§7). No data-driven open fan-out. **Placeholder mode needs ZERO external deps/keys/network** → it
-ALWAYS runs on Pi; gemini mode needs `fetch` + `sharp` + a key and degrades cleanly when any is
-absent. Keep temperature low — asset filling wants deterministic prompts + deterministic placeholder
-colors, not creativity. The node is **parallelizable with W4-M1** precisely because it shares no file
+§7). No data-driven open fan-out. Real generation (the default) is one Bash call to the `gen/` tool,
+which needs the bundled `.venv` (PIL/numpy/google-genai) + a key; it **exits 3 and degrades** when
+any is absent. **The placeholder floor needs ZERO external deps/keys/network** → it ALWAYS runs on
+Pi, so a Pi executor without the key/deps still ships a fully-rendering game. Keep temperature low —
+asset filling wants deterministic prompts + deterministic placeholder colors, not creativity. The
+node is **parallelizable with W4-M1** precisely because it shares no file
 with W4 and only writes `path`+`status` back (§6a) — the workflow's `parallel()` lane is safe.

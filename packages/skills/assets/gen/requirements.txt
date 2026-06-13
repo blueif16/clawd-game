@@ -1,0 +1,4 @@
+# W3 real-asset generator deps. Versions pinned to the proven Omniscience set.
+google-genai==1.65.0
+pillow==12.2.0
+numpy==2.4.4

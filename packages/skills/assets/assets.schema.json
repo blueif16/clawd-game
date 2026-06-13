@@ -14,7 +14,7 @@
     "mode": {
       "type": "string",
       "enum": ["placeholder", "gemini"],
-      "description": "The mode W3 ran in. 'placeholder' is the v1 default; 'gemini' is the toggle. Even in gemini mode, individual slots may be 'placeholder' (per-slot graceful degradation)."
+      "description": "The mode W3 ran in. 'gemini' (REAL generation via the gen/ tool) is the DEFAULT/primary path; 'placeholder' is the graceful FLOOR (the tool exited 3 — no key/deps). Even when the run mode is 'gemini', individual slots may be 'placeholder' (per-slot graceful degradation)."
     },
     "model": {
       "type": "string",
@@ -102,7 +102,7 @@
     "notes": {
       "type": "array",
       "items": { "type": "string" },
-      "description": "Free-form notes: failed/oversized generations + reason, pixel-snap applied, empty-slots case, degradation, anything mirrored in MEMORY.md."
+      "description": "Free-form notes: provenance pointer (public/assets/_provenance.json — prompt/model/date per generated slot, written by the gen/ tool, the seed of a reusable asset library), failed/degraded generations + reason, empty-slots case, anything mirrored in MEMORY.md."
     }
   }
 }

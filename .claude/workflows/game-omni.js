@@ -36,7 +36,7 @@ export const meta = {
     { title: 'W1 Spec', detail: 'Designer: slim GDD + milestone list (3-5) with per-milestone runtime assertions. Writes spec/gdd.json + spec/PLAN.md.' },
     { title: 'VERIFY-1 Design', detail: 'Design Critic (pre-code, static): judge + HARDEN the thesis into a winnable, complete, frozen blueprint (rubric + kinematic feasibility + threat-on-path). Writes spec/blueprint.json + spec/DESIGN_REVIEW.md.' },
     { title: 'W2 Scaffold', detail: 'Coder: copy genre template -> running empty project + STRUCTURE.md + index.json (asset slots); merges the blueprint\'s COMPLETE config.' },
-    { title: 'W3 Assets', detail: 'Artist: fill public/assets/ + ASSETS.md from index.json. Placeholder-first (gemini toggle).' },
+    { title: 'W3 Assets', detail: 'Artist: fill public/assets/ + ASSETS.md from index.json. Real generation (gen/ tool) by default; placeholder is the graceful floor.' },
     { title: 'W4 Execute', detail: 'Executor (zero design latitude): build the frozen blueprint VERBATIM (coordinates/routes/respawn flow); populate window.__GAME__ for real; build green; HALT + escalate on any missing number, never invent.' },
     { title: 'VERIFY-2 QA', detail: 'Playtester (bounded self-fix <=3): headless -> user-flow fidelity from known preconditions + completability replay + invariants + ISOMORPHIC PERTURBATION -> VALIDATION_PASSED/FAILED. Writes verify/report.M<id>.json. NOT gameness.' },
   ],
@@ -391,7 +391,8 @@ Do not implement game logic, levels, or assets. Return the status receipt.`,
 // W3 — Assets  (skill: packages/skills/assets/SKILL.md)
 // Reads:  ${PROJECT}/index.json (frozen asset slots) + ${PROJECT}/spec/gdd.json (art style)
 // Writes: ${PROJECT}/public/assets/* + ${PROJECT}/ASSETS.md, updates index.json rows' path+status.
-// Placeholder-first (v1 default; zero external key); gemini real-sprite generation is a toggle.
+// REAL generation is the DEFAULT (gen/generate_assets.py via Bash); placeholder is the graceful FLOOR
+// (when the tool exits 3 — no key/deps — or a slot fails). The game always renders either way.
 // Depends ONLY on index.json — never on game code. pipeline-design §7 specced this as a parallel lane
 // (W3 ∥ W4-M1); for v1 we run it SERIALLY before the milestone loop, because both W3 and W4 append to
 // MEMORY.md and concurrent whole-file rewrites would lose notes (W5 reads MEMORY.md for known quirks).
@@ -403,25 +404,27 @@ const ASSETS_RESULT_SCHEMA = {
   required: ['status', 'mode'],
   properties: {
     status: { type: 'string', enum: ['done', 'empty', 'failed'], description: 'done = every slot filled; empty = no slots; failed = could not write manifest.' },
-    mode: { type: 'string', enum: ['placeholder', 'gemini'], description: 'Effective mode (gemini degrades to placeholder if key/sharp/style unavailable).' },
+    mode: { type: 'string', enum: ['placeholder', 'gemini'], description: "Effective mode: 'gemini' when the gen/ tool RAN (exit 0, real assets produced); 'placeholder' when it degraded (exit 3: no key/deps)." },
     slotsFilled: { type: 'integer', minimum: 0 },
-    slotsGenerated: { type: 'integer', minimum: 0, description: 'Real (gemini) assets produced.' },
+    slotsGenerated: { type: 'integer', minimum: 0, description: 'Real (gemini) assets produced by the gen/ tool.' },
     slotsPlaceholder: { type: 'integer', minimum: 0 },
-    degraded: { type: 'boolean', description: 'True if gemini was requested but any slot fell back to placeholder.' },
+    degraded: { type: 'boolean', description: 'True if any non-audio slot fell back to the placeholder floor (whole-run exit-3 degrade, or per-slot failure).' },
     notes: { type: 'string' },
   },
 }
 
 phase('W3 Assets')
-log('game-omni: filling asset slots (placeholder-first) + ASSETS.md manifest — parallel-safe lane')
+log('game-omni: filling asset slots (real generation via gen/ tool, placeholder floor) + ASSETS.md manifest — parallel-safe lane')
 const w3 = await agent(
   nodePrompt('packages/skills/assets/SKILL.md', `You are W3 (Artist), the parallel asset lane. Read ${PROJECT}/index.json (the frozen asset SLOT manifest from W2) and ${PROJECT}/spec/gdd.json (art style + entity provenance).
 
-Mode = placeholder by DEFAULT. Use gemini ONLY if mode:gemini was requested AND a Gemini API key (GEMINI_API_KEY or GOOGLE_AI_API_KEY) resolves AND sharp is importable AND gdd.meta.artStyle is not 'placeholder'; otherwise stay in placeholder mode and record the reason.
+REAL generation is the DEFAULT path — generate ALL the assets the design references; never simplify, skip, or down-scope a slot (image generation is effectively free). FIRST, attempt real generation by running the bundled tool via Bash (it processes every non-audio slot in one call, batching sprites into grids, generating backgrounds separately at their own aspect ratio, animations as correctly-dimensioned horizontal strips, and writing ${PROJECT}/public/assets/_provenance.json):
+  packages/skills/assets/gen/.venv/bin/python packages/skills/assets/gen/generate_assets.py --index ${PROJECT}/index.json --gdd ${PROJECT}/spec/gdd.json --out ${PROJECT}/public/assets --style "<gdd.meta.artStyle>"
+The tool resolves its OWN API key (env GOOGLE_API_KEY/GEMINI_API_KEY, else the gitignored repo-root .env.assets) — you do NOT pass, print, echo, or commit the key. Branch on its EXIT CODE: 0 = it ran (slots flipped to 'generated' in index.json + provenance written; mode=gemini); 3 = degrade-to-placeholder (no key/deps — nothing generated; mode=placeholder); 2 = bad args (fix the --index/--gdd/--out paths, retry once, else full placeholder). The tool isolates per-slot failures and never crashes the run.
 
-For EVERY slot in index.json.slots[]: produce a correctly-dimensioned file under ${PROJECT}/public/assets/ (sprites/images/tiles/backgrounds/audio by type) per the skill. Placeholder = legible greybox (deterministic per-key color + role silhouette + dims, transparent where the type needs it; NEVER text/labels/watermarks baked into the pixels — names live only in ASSETS.md). Gemini = gemini-2.5-flash-image via raw REST with the type+archetype-conditioned prompt, magenta chroma-key + sharp trim/contain-resize for sprites, pixel-snap if pixelArt, style-anchored to the first sprite; degrade any failed slot to a placeholder. NEVER block on audio (placeholder WAV).
+THEN fill the FLOOR: for EVERY slot the tool did NOT mark 'generated' (and ALL audio), write a legible placeholder per the skill (deterministic per-key color + role silhouette + correct dims, transparent where the type needs it; backgrounds fully opaque incl. effect regions; NEVER text/labels/watermarks baked into the pixels — names live only in ASSETS.md). NEVER block on audio (placeholder WAV). Every slot ends with coverage (generated, placeholder, or — last resort — pending for the template Preloader).
 
-Then: (a) write back ONLY each filled slot's path+status into ${PROJECT}/index.json (keys/order untouched, one atomic rewrite, re-validate against packages/skills/scaffold/index.schema.json); (b) write ${PROJECT}/ASSETS.md in full per the skill (valid against packages/skills/assets/assets.schema.json); (c) append quirks/degradation to ${PROJECT}/MEMORY.md. Do NOT write src/**, spec/**, tilemap JSON, or any new slot/key. Empty slots:[] -> write ASSETS.md note and stop. Return the status receipt.`,
+Then: (a) write back ONLY each placeholder slot's path+status into ${PROJECT}/index.json (the tool already wrote the generated ones; keys/order untouched, one atomic rewrite, re-validate against packages/skills/scaffold/index.schema.json); (b) write ${PROJECT}/ASSETS.md in full per the skill, asserting only properties VERIFIED against the on-disk bytes, and surfacing _provenance.json (valid against packages/skills/assets/assets.schema.json); (c) append quirks/degradation to ${PROJECT}/MEMORY.md. Do NOT write src/**, spec/**, tilemap JSON, or any new slot/key. Empty slots:[] -> write ASSETS.md note and stop. Return the status receipt (mode='gemini' when real gen ran, degraded=true when any slot fell to placeholder).`,
     contract({ artifacts: ['ASSETS.md'], owns: ['public/assets/**', 'ASSETS.md', 'index.json', 'MEMORY.md'], readScope: [PROJECT, 'packages/skills/assets', 'packages/skills/scaffold'] })),
   { label: 'W3 assets', phase: 'W3 Assets', schema: ASSETS_RESULT_SCHEMA }
 )

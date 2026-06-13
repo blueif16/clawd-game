@@ -1,0 +1,4 @@
+# Local generator venv — provisioned from requirements.txt, never tracked.
+.venv/
+__pycache__/
+*.pyc
