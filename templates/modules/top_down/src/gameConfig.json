@@ -3,7 +3,7 @@
     "width": {
       "value": 1280,
       "type": "number",
-      "description": "Game design width in pixels. 16:9 so Scale.FIT is full-bleed (no letterbox bars) on a standard 16:9 monitor; camera + physics world bounds equal this design resolution so level content fills the frame."
+      "description": "VIEWPORT design width in pixels (the browser frame, NOT the world). 16:9 so Scale.FIT is full-bleed (no letterbox bars) on a standard 16:9 monitor. The WORLD a level occupies is the level scene's mapWidth/mapHeight, which may be LARGER than the viewport (a multi-screen scrolling level) — the camera follows the player so the viewport stays full at every scroll position; for a single-screen level mapWidth/mapHeight == this viewport size."
     },
     "height": {
       "value": 720,

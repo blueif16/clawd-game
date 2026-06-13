@@ -33,11 +33,16 @@ const config: Phaser.Types.Core.GameConfig = {
   backgroundColor: '#1a1a2e',
   parent: 'game-container',
   scale: {
-    // FIT preserves the design aspect ratio and centers; because screenSize is
-    // 16:9 (1280x720), it is full-bleed (no letterbox bars) on a standard 16:9
-    // monitor. DO NOT switch to RESIZE/ENVELOP: levels author entity coordinates
-    // in this FIXED design-resolution world (camera/physics bounds == screenSize),
-    // and RESIZE would reflow the world and break those fixed layouts.
+    // screenSize is the VIEWPORT (the browser frame), NOT the world. FIT preserves
+    // the design aspect ratio and centers; because screenSize is 16:9 (1280x720),
+    // it is full-bleed (no letterbox bars) on a standard 16:9 monitor. The WORLD a
+    // level occupies is BaseLevelScene.mapWidth/mapHeight, which MAY be wider than
+    // the viewport (an N-screen scrolling level) — the camera follows the player so
+    // the viewport stays full at every scroll position (setupCamera). For a
+    // single-screen level mapWidth == the viewport width and the camera simply can't
+    // scroll. DO NOT switch to RESIZE/ENVELOP: levels author entity coordinates in
+    // this FIXED design resolution, and RESIZE would reflow the viewport and break
+    // those fixed layouts.
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
