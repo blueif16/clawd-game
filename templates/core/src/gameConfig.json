@@ -1,14 +1,14 @@
 {
   "screenSize": {
     "width": {
-      "value": 1152,
+      "value": 1280,
       "type": "number",
-      "description": "Game width in pixels"
+      "description": "Game design width in pixels. 16:9 so Scale.FIT is full-bleed (no letterbox bars) on a standard 16:9 monitor; the camera + physics world bounds equal this design resolution (single source of truth) so level content fills the frame."
     },
     "height": {
-      "value": 768,
+      "value": 720,
       "type": "number",
-      "description": "Game height in pixels"
+      "description": "Game design height in pixels. 16:9 (1280x720) — see width."
     }
   },
   "debugConfig": {

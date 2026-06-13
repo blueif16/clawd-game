@@ -86,11 +86,13 @@ export class _TemplateLevel extends BaseLevelScene {
   // ============================================================================
 
   setupMapSize(): void {
-    // TODO: Set map dimensions (in pixels)
-    // Based on tilemap size: width_tiles * this.tileSize
-    // Default: 18×12 tiles (compact, fills screen)
-    this.mapWidth = 18 * this.tileSize; // 1152px
-    this.mapHeight = 12 * this.tileSize; // 768px
+    // TODO: Set map dimensions (in pixels). For a screen-filling arena, derive
+    // from the design resolution so the world == the (16:9) canvas and fills the
+    // frame with no bars (single source of truth = gameConfig.screenSize, which
+    // backs this.scale). For a SCROLLING map, set a larger explicit size instead
+    // (e.g. width_tiles * this.tileSize) — the camera follows the player.
+    this.mapWidth = this.scale.width; // 1280px (== gameConfig.screenSize)
+    this.mapHeight = this.scale.height; // 720px
   }
 
   createEnvironment(): void {

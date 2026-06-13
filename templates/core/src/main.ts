@@ -33,6 +33,11 @@ const config: Phaser.Types.Core.GameConfig = {
   backgroundColor: '#1a1a2e',
   parent: 'game-container',
   scale: {
+    // FIT preserves the design aspect ratio and centers; because screenSize is
+    // 16:9 (1280x720), it is full-bleed (no letterbox bars) on a standard 16:9
+    // monitor. DO NOT switch to RESIZE/ENVELOP: levels author entity coordinates
+    // in this FIXED design-resolution world (camera/physics bounds == screenSize),
+    // and RESIZE would reflow the world and break those fixed layouts.
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
