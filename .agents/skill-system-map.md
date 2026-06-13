@@ -2,9 +2,10 @@
 
 _Hermes INIT map. The single answer to "what is our skill system, and what workflow orchestrates it?"
 Free-form, no scores. Evolves and gets more certain with every run — append responsibilities, notes, and
-diagnostics as we learn them; a stale map is the one real failure mode. Last refreshed: 2026-06-12 (mid-OPERATE —
-a 3-capture cw1 fix-everything batch: **A assets + B fullscreen COMMITTED** (`819f549`/`f5104d0`); **C game-design
-foundations STAGED + iterating** toward a single-rich-level doctrine — see the diagnostics log)._
+diagnostics as we learn them; a stale map is the one real failure mode. Last refreshed: 2026-06-12 — a cw1
+fix-everything batch is now COMMITTED: A assets `819f549`, B fullscreen `f5104d0`, C game-design foundations
+(score-meaning + richness-via-prompt-craft) `f97eb9d` + camera/world-bounds `ef03037`. NEXT SESSION: the producing
+path past the design nodes (W2/W4 build the now-rich, scrolling design); see the diagnostics-log tail._
 
 ## What this system is
 An AI **game-generation engine**: one prompt → a verified, playable Phaser 2D web game in one pass.
@@ -495,22 +496,46 @@ session can retrace the evidence behind any edit. A claim with no doc on disk is
   letterboxes on a 16:9 monitor. Fix: 1280×720 design res (full-bleed under FIT); camera + `physics.world` bounds
   derive from `gameConfig.screenSize` (single source) so level content fills the world. Coordination (→ the design
   nodes): author `layout.bounds = screenSize`. (commit `f5104d0` · skillsys(scaffold); doc: the commit-body verify.)
-- ⏳ **STAGED 2026-06-12 — Capture C (game-design foundations), UNCOMMITTED + ITERATING.** Same cw1 series-eval: the
-  human named "too simple" + "meaningless score." A NEW grounding doc `research/game-design-foundations.md` (812
-  lines, 38 sources) was written and its §G Application Map encoded into the DESIGN nodes (`classify-game` +
-  `write-gdd` + `verify-design` — SKILL + schema each — + `game-omni.js` W0/W1 return schemas +
-  `.agents/skill-system-criteria.md`). **VALIDATED on a MiniMax-M3 clean-room re-run (cw1 prompt → `out/ceval1`):**
-  **W0 ✅** (`scoringModel:"bounded-collectible"` + `mustPreserve`; scopeCut no longer cuts multi-level). **W1
-  score-meaning ✅** — `meta.maxScore:3` + the idempotent/bounded assertions (M2-A4 "re-watering incl. after a
-  respawn does NOT increment score", M2-A5 "score ≤ maxScore", M3-A1 "score gates the win") — the cw1 farming bug
-  is FIXED; BOUNDS ✅ (1280×720). **OPEN — the difficulty doctrine is being RE-FRAMED (human direction 2026-06-12):**
-  W1 took the §4.5 "or one level" escape and still shipped one short level → "too simple" NOT resolved. **Human
-  pivot — DROP multi-level as the goal: make ROUND ONE a genuinely great game — HARDER, LONGER, content-RICH**
-  (escalating challenge + multiple contested decisions WITHIN one level, grounded in `game-design-foundations.md`
-  §C flow-channel / §D.1 "iterate one mechanic to escalate" / §E loop), with the scaffold's `LevelManager` keeping
-  multi-level a CHEAP ON-DEMAND extension (only when the user asks for "another level"). Next: re-edit W0/W1/VERIFY-1
-  + the criteria fixture's ladder entries to the single-rich-level doctrine, re-run W1, then commit C as
-  dated/sha'd diagnostics lines. (doc: `research/game-design-foundations.md`.)
+- 2026-06-12 — design-node BOUNDS doctrine (`write-gdd` §4.6/§4.5, `verify-design` §5/§4.6 + the blueprint example,
+  `game-omni.js` W1+VERIFY-1 prompts, `.agents/skill-system-criteria.md`) + template doctrine comments
+  (`templates/core/main.ts` + the 3 `gameConfig.json` screenSize descriptions) — **VIEWPORT vs WORLD: a longer level
+  may be WIDER than the viewport, camera follows.** ceval3's newly-rich W1 (`out/ceval3/spec/PLAN.md`) correctly
+  authored a 3-screen scrolling world (3840×720), but the f5104d0 doctrine ("`layout.bounds = screenSize`") CAPPED the
+  world at one screen — a contradiction. Fix (generalized): the VIEWPORT stays `screenSize` (1280×720, full-bleed via
+  `Scale.FIT` — f5104d0 untouched); the WORLD (`layout.bounds`) is the viewport for a single-screen level OR an integer
+  MULTIPLE of the viewport width for a longer scrolling level (`bounds.width = N×1280`), camera FOLLOWING the player so
+  the viewport stays full at every scroll position. A long §3.5 path ⇒ a wide world (HARDEN, never cap). NO template
+  code change needed — `BaseLevelScene.setupCamera()` already `setBounds(0,0,mapWidth,mapHeight)` + unconditional
+  `startFollow(player)`, and W4 sets `mapWidth` from `layout.bounds`; only stale "world == screenSize" doctrine comments
+  were corrected. VERIFIED headless (`/tmp/cam-test`, cw1 copy, `mapWidth=3840`, door@x=3700, Playwright+chromium):
+  spawn scrollX=0 (door off-screen) → after held ArrowRight player.x 80→3690, scrollX 0→2688 (= 3840−1152 viewport,
+  clamped at the world edge), camW unchanged → camera SCROLLS to follow, far content comes into view, no letterbox/empty
+  world. (commit `f97eb9d` doctrine + `ef03037` template comments · skillsys(write-gdd)/skillsys(scaffold); doc: this
+  entry + the `/tmp/cam-test` screenshots.)
+- 2026-06-12 — DESIGN NODES (`classify-game` + `write-gdd` + `verify-design` — SKILL + schema each — + `game-omni.js`
+  W0/W1/VERIFY-1 prompts + `.agents/skill-system-criteria.md`) + NEW `research/game-design-foundations.md` (812 lines,
+  38 sources) + NEW global skill `~/.claude/skills/agentic-prompt-design/` — **Capture C: game-design foundations
+  encoded — score-meaning + level RICHNESS.** cw1 series-eval: the human named "meaningless score" + "too simple".
+  **(1) SCORE-MEANING (the farming bug):** W0 emits `scoringModel`; W1 declares `meta.maxScore` = Σ idempotent rewards
+  + asserts re-collect-after-respawn does NOT increment + `score ≤ maxScore` + score gates the win; VERIFY-1 proves it
+  (observable-only, oracle untouched). **(2) RICHNESS — the hard one:** doctrine ALONE ("be substantial") failed on the
+  executor across 3 runs (it placed the prompt's literal entities and stopped; the cloud cw1 did the same → systemic
+  literal-ness = a PROMPT-CRAFT gap, not a doctrine gap). FIX: a subagent authored the global `agentic-prompt-design`
+  skill (Exa, 35 sources — "thin output is a SPECIFICATION gap"); a second subagent applied it to RAISE the
+  W0/W1/VERIFY-1 prompts — an ENUMERATED "what substantial contains" target + a countable-RELATION floor (≥3 distinct
+  escalating beats, beyond one screen, later-harder-than-teach) + a good-vs-thin exemplar + a mandatory §3.7
+  self-critique pass + VERIFY-1 as the hard gate. Richness = depth/length/escalation of the SAME loop, NEVER a new
+  system (scope-cut intact). Single rich level is the default (multi-level a cheap on-demand `LevelManager` extension).
+  **VALIDATED on MiniMax-M3 (cw1 prompt → `out/ceval3`):** round one is now an 8-terrace, 3-crow (same kind, escalating
+  speed 160→200→240), 4-beat (teach→contested→escalation→climax), ~3-screen escalating level with an earned climax +
+  the bounded/idempotent/gating score — vs the prior thin 30s crossing (`out/ceval1`/`ceval2`). **META-LESSON:** when a
+  doctrine edit won't carry on the executor, the fix is PROMPT-CRAFT (specify the bar, enumerate the target, demand
+  elaboration, self-critique), NOT more doctrine — now captured in the global skill. (commit `f97eb9d` ·
+  skillsys(write-gdd); the viewport/world camera-bounds twin = `f97eb9d` doctrine + `ef03037` template comments;
+  docs: `research/game-design-foundations.md` + `~/.claude/skills/agentic-prompt-design/SKILL.md`.)
+  **STILL OPEN (next session):** W2/W4 + scaffold must actually BUILD the longer scrolling level the design now
+  declares (wide world + camera-follow — the template supports it, proven headless `/tmp/cam-test`); the producing
+  path PAST the design nodes is the next sweep target.
 - _(future flaws/fixes append here so repeat-flaws become visible and the next diagnosis starts ahead.)_
 
 ## Stewardship note
