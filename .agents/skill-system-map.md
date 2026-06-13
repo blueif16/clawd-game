@@ -2,11 +2,13 @@
 
 _Hermes INIT map. The single answer to "what is our skill system, and what workflow orchestrates it?"
 Free-form, no scores. Evolves and gets more certain with every run — append responsibilities, notes, and
-diagnostics as we learn them; a stale map is the one real failure mode. Last refreshed: 2026-06-12._
+diagnostics as we learn them; a stale map is the one real failure mode. Last refreshed: 2026-06-12 (mid-OPERATE —
+a 3-capture cw1 fix-everything batch: **A assets + B fullscreen COMMITTED** (`819f549`/`f5104d0`); **C game-design
+foundations STAGED + iterating** toward a single-rich-level doctrine — see the diagnostics log)._
 
 ## What this system is
 An AI **game-generation engine**: one prompt → a verified, playable Phaser 2D web game in one pass.
-It is a **workflow that orchestrates a skill system** — six nodes, each loading one evidence-grounded
+It is a **workflow that orchestrates a skill system** — seven nodes, each loading one evidence-grounded
 skill, coordinating ONLY through on-disk artifacts (the filesystem is the contract). Built one
 research-grounded sub-agent per node, in runtime order; each node was designed against the previous
 node's ACTUAL committed artifact, never an assumed contract.
@@ -73,12 +75,13 @@ game-omni.js. Each skill cites its provenance inline (repo path or URL) — no r
   rescope · the extended `verify/report.schema.json`. Harness `tsc --noEmit` green; chain `extract.mjs` → 11 stages.
 - **Validation run DONE (out/frog1, 2026-06-11):** the redesign is empirically validated AND caught a real design-gate
   bug; fixes landed (F1–F4 + ≥3-milestones — see the diagnostics log).
-- **OPEN CAPTURE — the next OPERATE loop starts here (captured, not yet routed/edited; human said stop):** _multi-level
-  progression._ **symptom:** human (playing `out/frog1`) "never can access level 2." **root cause:** milestones are
-  build-slices of ONE level → the game has no level progression. **rule (to encode):** a game has ≥3 playable LEVELS
-  that REUSE level-1's engine (level1→…→win); "3 stages per game" = LEVELS, not verify-milestones. **route:** W0/W1
-  design + scaffold `LevelManager`/`BaseLevelScene` wiring + the milestone↔level mapping (reconcile with the
-  ≥3-milestone edit `23f3bd6`).
+- **OPEN CAPTURE — multi-level progression — DEPRIORITIZED per human (2026-06-12): a single RICH level is the goal,
+  not a forced ladder.** **original symptom:** human (playing `out/frog1`) "never can access level 2." **human's
+  resolved stance (2026-06-12):** stop forcing multi-level — difficulty matters more than stage count; make ROUND
+  ONE a complete game that is HARDER, LONGER, content-RICH. The scaffold's `LevelManager` + `_TemplateLevel` keep
+  adding a level CHEAP and ON-DEMAND if/when the user asks for "another level." So the durable fix is the
+  single-rich-level difficulty doctrine in Capture C (the staged block in the diagnostics log), NOT a forced ladder.
+  **Residual (low priority):** the `LevelManager` multi-level wiring is exercised only on an explicit user request.
 
 ## Governing docs (owners too)
 - `status.md` — project entry point. `design/pipeline-design-v1.md` — the why (waves, milestone policy,
@@ -87,7 +90,11 @@ game-omni.js. Each skill cites its provenance inline (repo path or URL) — no r
 
 ## Runtime observability — where a run leaves evidence (read this before any diagnosis)
 - **Per-node research records (design-time evidence base, reusable):** `research/skills/w{0..5}-*-research.md`
-  (index: `research/skills/README.md`). Every skill practice traces to a citation here.
+  (index: `research/skills/README.md`). Every skill practice traces to a citation here. **Cross-node design
+  grounding:** `research/game-design-foundations.md` (the game-DESIGN "book", 38 cited sources — scoring-meaning /
+  max-score / idempotency, difficulty-floor / start-higher, scaffold-then-layer; its §G Application Map is what the
+  W0/W1/VERIFY-1 design edits encode). **Asset generator (real art):** `packages/skills/assets/gen/` (Gemini batch
+  tool; key in gitignored `.env.assets`) — W3's default once provisioned.
 - **Per-run product artifacts (in the project dir, default `out/game/`):** `spec/classification.json`,
   `spec/gdd.json`, `spec/PLAN.md`, `STRUCTURE.md`, `index.json`, `ASSETS.md`, `public/assets/*`,
   `src/**`, `MEMORY.md` (the run's quirks log — first stop for a W4/W5 diagnosis), and the proof:
@@ -472,6 +479,38 @@ session can retrace the evidence behind any edit. A claim with no doc on disk is
   the shipped file's per-frame dims (`1c19f07`); backgrounds opaque across the ENTIRE canvas, glows baked as
   opaque blends, manifest rows verify-then-claim (`485bf69`). Live validation: cloud run `wf_e9f9e1f6-42f` →
   `out/cw1`. (supporting: `_prior-runs/nv1/w3-blind-judge-verdict.md`.)
+- 2026-06-12 — `assets/SKILL.md` + `assets.schema.json` + `game-omni.js` (W3) + NEW `packages/skills/assets/gen/` —
+  **REAL Gemini batch generation is the W3 DEFAULT; placeholder is the graceful floor.** cw1 series-eval (human
+  played the cloud gnome game `out/cw1`): every generated game shipped greybox placeholders (sunflower = orange
+  disc) — real gen was never routed (gated behind an unsatisfiable no-key/no-`sharp` toggle). Fix: a self-contained
+  generator ported from the Omniscience scripts — small sprites BATCHED into 1×1/2×2/3×3 grids + split, backgrounds
+  generated separately at own ratio, LOCAL offline white-key (no network bg-removal), resize to slot dims,
+  manifest===bytes, `_provenance.json` (asset-library seed); the SKILL + W3 chain flip real-gen to PRIMARY
+  (placeholder = per-slot / exit-3 FLOOR — a Pi executor with no key/deps still ships a rendering game). PROVEN with
+  real cw1 art (storybook bg + 3-pose gnome strip + greenhouse). (commit `819f549` · skillsys(assets); doc:
+  `packages/skills/assets/gen/README.md` + per-run `_provenance.json`. key in gitignored `.env.assets`.)
+- 2026-06-12 — `templates/core` (`gameConfig.json` + `main.ts`) + both module gameConfigs + `top_down/_TemplateLevel.ts`
+  — **the game FILLS the window (16:9 1280×720); world/camera bounds derive from screenSize.** cw1 series-eval: the
+  built game rendered letterboxed (only part of the window). Root: `Scale.FIT` + a 3:2 (1152×768) design res
+  letterboxes on a 16:9 monitor. Fix: 1280×720 design res (full-bleed under FIT); camera + `physics.world` bounds
+  derive from `gameConfig.screenSize` (single source) so level content fills the world. Coordination (→ the design
+  nodes): author `layout.bounds = screenSize`. (commit `f5104d0` · skillsys(scaffold); doc: the commit-body verify.)
+- ⏳ **STAGED 2026-06-12 — Capture C (game-design foundations), UNCOMMITTED + ITERATING.** Same cw1 series-eval: the
+  human named "too simple" + "meaningless score." A NEW grounding doc `research/game-design-foundations.md` (812
+  lines, 38 sources) was written and its §G Application Map encoded into the DESIGN nodes (`classify-game` +
+  `write-gdd` + `verify-design` — SKILL + schema each — + `game-omni.js` W0/W1 return schemas +
+  `.agents/skill-system-criteria.md`). **VALIDATED on a MiniMax-M3 clean-room re-run (cw1 prompt → `out/ceval1`):**
+  **W0 ✅** (`scoringModel:"bounded-collectible"` + `mustPreserve`; scopeCut no longer cuts multi-level). **W1
+  score-meaning ✅** — `meta.maxScore:3` + the idempotent/bounded assertions (M2-A4 "re-watering incl. after a
+  respawn does NOT increment score", M2-A5 "score ≤ maxScore", M3-A1 "score gates the win") — the cw1 farming bug
+  is FIXED; BOUNDS ✅ (1280×720). **OPEN — the difficulty doctrine is being RE-FRAMED (human direction 2026-06-12):**
+  W1 took the §4.5 "or one level" escape and still shipped one short level → "too simple" NOT resolved. **Human
+  pivot — DROP multi-level as the goal: make ROUND ONE a genuinely great game — HARDER, LONGER, content-RICH**
+  (escalating challenge + multiple contested decisions WITHIN one level, grounded in `game-design-foundations.md`
+  §C flow-channel / §D.1 "iterate one mechanic to escalate" / §E loop), with the scaffold's `LevelManager` keeping
+  multi-level a CHEAP ON-DEMAND extension (only when the user asks for "another level"). Next: re-edit W0/W1/VERIFY-1
+  + the criteria fixture's ladder entries to the single-rich-level doctrine, re-run W1, then commit C as
+  dated/sha'd diagnostics lines. (doc: `research/game-design-foundations.md`.)
 - _(future flaws/fixes append here so repeat-flaws become visible and the next diagnosis starts ahead.)_
 
 ## Stewardship note
