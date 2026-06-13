@@ -13,6 +13,7 @@
     "physicsProfile",
     "reasoning",
     "confidence",
+    "scoringModel",
     "scopeCut"
   ],
   "properties": {
@@ -66,11 +67,20 @@
       "enum": ["high", "medium", "low"],
       "description": "high = unambiguous; medium = resolved via tie-break; low = barely fit / defaulted (see SKILL §5)."
     },
+    "scoringModel": {
+      "type": "string",
+      "enum": ["none", "bounded-collectible", "bounded-threshold", "performance"],
+      "description": "The scoring signal derived from the prompt's GOAL-TYPE (SKILL §2.5), passed to W1 so it scores only when the type warrants it (never a reflexive open counter). none = pure completion, no countable rewards (win is the readout); bounded-collectible = completion via a finite reward set (maxScore = sum of rewards); bounded-threshold = hit a target/wave/opponent; performance = score-attack, the number IS the goal. Completion prompts default to none/bounded-collectible, never performance."
+    },
     "scopeCut": {
       "type": "array",
       "minItems": 1,
       "items": { "type": "string", "minLength": 1 },
-      "description": "What is deliberately OUT of v1 (4-8 entries recommended). The anti-slop guardrail; downstream treats these as out-of-bounds. Names systems, not one-off named features. Never cuts game-feel/juice."
+      "description": "What is deliberately OUT of v1 (4-8 entries recommended). The anti-slop guardrail; downstream treats these as out-of-bounds. Names systems, not one-off named features. Never cuts game-feel/juice. Distinguishes 'more systems' (cut) from 'a short engine-reuse level-ladder' (kept — SKILL §3 scope-preserve)."
+    },
+    "mustPreserve": {
+      "type": "string",
+      "description": "The scope-PRESERVE counter-pressure (SKILL §3): the ONE core contested decision (a risk weighed against a reward on the critical path) the scope-cut must NOT remove, so W1 keeps round one a real game, not a tutorial. A relation in one line, never a per-prompt constant. Omit only for a pure sandbox prompt with no contested decision."
     },
     "coreFantasy": {
       "type": "string",

@@ -45,6 +45,9 @@
         "coreLoop": { "type": "string", "minLength": 1 },
         "coreVerb": { "type": "string", "minLength": 1 },
         "coreFantasy": { "type": "string" },
+        "failModel": { "type": "string", "enum": ["health", "lives", "respawn", "none"], "description": "Carried from gdd.meta.failModel. The HUD surfaces only the resource this drives." },
+        "scoringModel": { "type": "string", "enum": ["none", "bounded-collectible", "bounded-threshold", "performance"], "description": "Carried from gdd.meta.scoringModel. none ⇒ no score (the win is the readout). Non-none ⇒ maxScore declared + rewards idempotent. VERIFY-1 proves score-bounded/idempotent/coheres (§4.5)." },
+        "maxScore": { "type": "number", "minimum": 0, "description": "REQUIRED when scoringModel != none: the finite reachable ceiling == Σ(reward values from layout.rewards). VERIFY-1 proves the equality; the score AC asserts score ≤ maxScore. Omit when scoringModel == none." },
         "artStyle": { "type": "string", "minLength": 1 },
         "physicsProfile": {
           "type": "object",
@@ -221,7 +224,7 @@
           "type": "object",
           "additionalProperties": false,
           "required": ["width", "height"],
-          "description": "Level dimensions in pixels (continuous) or cells (grid_logic).",
+          "description": "Level dimensions = the template gameConfig.screenSize (currently 1280×720, 16:9) for continuous archetypes (SKILL §5), or the grid extent (cells) for grid_logic. Every declared coordinate sits inside these bounds; derive from screenSize (a relation), not a free 960×540/800×600.",
           "properties": {
             "width": { "type": "number", "exclusiveMinimum": 0 },
             "height": { "type": "number", "exclusiveMinimum": 0 }

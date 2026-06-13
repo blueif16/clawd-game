@@ -20,3 +20,7 @@ imagination.
 
 _Orchestration: built one sub-agent per node, in runtime order; each reads the previous node's
 actual committed artifact + skill from disk before designing itself._
+
+---
+
+**Cross-node design foundations:** [`../game-design-foundations.md`](../game-design-foundations.md) — a thorough, cited reference grounding the DESIGN nodes (W0/W1/VERIFY-1) in game-design theory: the game-type→needs taxonomy, scoring philosophy (when to score, MAX-score, IDEMPOTENT rewards — the score-meaning fix), "start higher not a tutorial" + flow/difficulty-floor, scaffold-then-layer level ladders, interesting decisions/risk-reward, win/lose integrity, and an Application Map of how each principle should change the three design skills.

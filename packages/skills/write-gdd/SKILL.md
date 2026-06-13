@@ -54,7 +54,9 @@ Read `spec/classification.json` (relative to the project dir). It gives you:
 | `coreLoop` | **The spine you elaborate.** M1 makes this one line playable; it seeds win/lose. Carry verbatim into `meta.coreLoop`. |
 | `coreVerb` | The single central action — M1's assertion centers on it. Carry into `meta.coreVerb`. |
 | `physicsProfile` | Carry verbatim into `meta.physicsProfile` (W2 sets engine params from it). |
-| `scopeCut` | **A HARD WALL.** Every entity/mechanic/asset/milestone must respect it. Build nothing on this list. |
+| `scopeCut` | **A HARD WALL.** Every entity/mechanic/asset/milestone must respect it. Build nothing on this list. (Note: enriching round one into a SUBSTANTIAL single level — §3.5 — is never scope creep; a multi-level ladder is OPTIONAL, built only if the prompt explicitly asks — §4.5.) |
+| `scoringModel` | **Whether/how this game-TYPE scores** (§3.6): `none` ⇒ declare NO score (the win is the readout); `bounded-collectible`/`bounded-threshold` ⇒ declare a finite `meta.maxScore` with idempotent rewards; `performance` ⇒ score IS the goal, bounded by the run's fail/timer. Never bolt a counter onto a `none` game. |
+| `mustPreserve` | If present, the ONE core contested decision the design MUST keep (§3.5 CHALLENGE / RICHNESS + DIFFICULTY FLOOR) — round one is a substantial, escalating single-level game that re-exercises this decision, never a thin tutorial. Carry its intent into the §3.5 coupling as the loop the rich level repeats at rising difficulty. |
 | `confidence` | If `"low"`, you may simplify or re-anchor the design — see §6. `reasoning` names the ambiguity. |
 | `coreFantasy` | If present, carry into `meta.coreFantasy` (helps art + tone). |
 
@@ -104,7 +106,9 @@ _([repo] generate-gdd "every section maps to a tool input or code file"; ForgeDN
 - **`meta`** — `title` (derive a short name from the prompt), plus the carried-over
   `archetype`/`coreLoop`/`coreVerb`/`physicsProfile`/`coreFantasy`, and `artStyle` (a short
   art-direction note; `"placeholder"` is valid for v1). → W3 reads `artStyle`; W2 reads
-  `archetype`/`physicsProfile`.
+  `archetype`/`physicsProfile`. **Carry `scoringModel` from the classification into `meta.scoringModel`,
+  and if it is NOT `none`, declare `meta.maxScore` = the finite, reachable sum of all idempotent reward
+  values (§3.6).** (`failModel` is the separate fail-model twin, below.)
 - **`entities[]`** — every game object the milestones reference. **The player is `entities[0]`,
   `role:"player"`.** Each: `id` (snake_case, used by assertions + assetList), `role`,
   `description` (one line), optional `behaviors[]` (template behaviors to compose — name only
@@ -149,6 +153,10 @@ _([repo] generate-gdd "every section maps to a tool input or code file"; ForgeDN
   health mechanic. Encode the RELATION "the HUD shows ⟺ a live game-driven resource under the chosen
   fail-model," never a genre constant. _(2026-06-11 frog1 hud-healthbar: a respawn-only game shipped a
   static `100/100` bar because `maxHealth` was inert config no node could read as "no health model.")_
+- **`scoringModel` / `maxScore` (the SCORE-MEANING contract — §3.6).** Carry `meta.scoringModel`
+  verbatim from the classification; it decides whether to score at all. **`none` ⇒ declare NO score**
+  (no `maxScore`, no score readout — the win is the readout). **Non-`none` ⇒ declare `meta.maxScore`**
+  (§3.6) and make every reward **idempotent**. Never bolt a bare open counter onto a completion game.
 - **`config`** — tuning numbers (flat `key: number`), keys matching the archetype's config
   schema (§2). Optional but recommended.
 - **`assetList[]`** — the art/audio as slots: `{slot, type, description, +frames/width/height}`.
@@ -191,21 +199,176 @@ _([repo] generate-gdd "every section maps to a tool input or code file"; ForgeDN
 >    GMTK 4-step "introduce the concept in a safe environment… so if you fall you don't lose a life";
 >    [E] Level Design Book "teach, test, twist" + "start slow and quiet"; [E] "Isolation Principle";
 >    [Y] Chong-U "gym level" with debug bounds — which catches the unreachable-platform bug directly.)_
-> 4. **CHALLENGE (the threat must contest the reward — the "interesting decision").** A level that
->    is reachable, legible, and safely onboarded can STILL be boring: winnable by ignoring the threat
->    entirely (collect in open space while the enemy patrols an empty corner). So place the core
->    threat(s) **on or astride the critical / reward path** — collecting the reward and reaching the
->    goal must push the player into the threat's space, so the core loop is a genuine **risk
->    decision**, not a detour the player can skip. Encode the RELATION "the threat contests the
->    reward path" (a hazard on the route to a collectible; a patrol whose area overlaps the goal
->    approach; an enemy between the player and what they need), **never a genre constant** (not
->    "guard at x=900"). Record the coupling in `PLAN.md` for EACH reward/goal: which threat contests
->    it, and where they meet. **W4 honors this placement** (it reads `## Playability`); a level whose
->    threats sit in unvisited corners is mis-designed — re-place the threat onto the path, never
->    weaken the loop. This is what makes it a GAME, not a chore — and the human is the eye that it
->    reads as tense. _([E] Sid Meier "a game is a series of interesting decisions"; [E] Level Design
->    Book "risk vs reward — the player weighs the danger against the payoff"; [Y] GMTK "tension comes
->    from threats placed along the player's route, not beside it".)_
+> 4. **CHALLENGE → RICHNESS + DIFFICULTY FLOOR (round one is a SUBSTANTIAL single-level game — harder,
+>    longer, content-rich — not a brief teach).** A level that is reachable, legible, and safely onboarded
+>    can STILL be boring: winnable by ignoring the threat entirely (collect in open space while the enemy
+>    patrols an empty corner), or so thin it ends in 30 seconds. Round one must instead be a *complete,
+>    genuinely great game in a SINGLE level* — and a single rich level is the **DEFAULT** and the
+>    expectation (NOT a deficiency, NOT a reason to add stages).
+>
+>    > **The bar (read this first — it is the load-bearing slot).** Your repeated failure mode is to place
+>    > exactly the entities the prompt literally names (the 3 collectibles + 1 enemy it mentioned), string
+>    > them along a single short screen, and stop — a ~30-second crossing beatable on the first try. That is
+>    > **THIN and it FAILS.** The prompt names the THEME + the core loop; **you must ELABORATE a substantial
+>    > level around it** — more instances, more length, and rising escalation of the SAME mechanics the loop
+>    > already has. "Substantial" is not a vibe; it is the enumerated inventory below, and you build against
+>    > it until every item is present.
+>
+>    **ENUMERATE THE TARGET — the inventory a SUBSTANTIAL single level contains (build against this list; do
+>    not stop until every item is present).** Round one is a LONG critical path of DISTINCT escalating beats,
+>    not one screen. Before writing milestones, lay out (in `PLAN.md ## Playability`) a level that has ALL of:
+>    1. **A LONG critical path of DISTINCT challenge beats** — a *sequence* of separate encounters/segments
+>       (a "pile of beats" arranged teach → test → twist), each a recognizably different moment, spanning
+>       well beyond a single screen. This is the spine; everything below hangs on it.
+>    2. **The core threat appearing/varying ENOUGH to CONTEST THE PATH REPEATEDLY** — the threat (or the
+>       SAME threat kind, more instances / faster / re-placed) is on or astride the route again and again, so
+>       the player must engage it at MULTIPLE points, not once. Place threats **on the critical/reward path**
+>       (a hazard on the route to a collectible; a patrol whose swept area overlaps the goal approach; an
+>       interceptor between the player and what they need) — **never** parked in an unvisited corner.
+>    3. **MULTIPLE genuine risk-vs-reward decisions** — more than one reward/goal, each CONTESTED by a threat
+>       the player must engage, so the loop "weigh danger against payoff" recurs along the path (not a single
+>       trivial touch).
+>    4. **RISING difficulty across the length** (per §C.1 flow channel + §D.1 "one or two ideas ITERATED to
+>       get increasingly challenging"): later beats are MEASURABLY harder than the teach — the difficulty sits
+>       slightly above skill and oscillates upward (tense/release) toward the climax. Use the per-archetype
+>       **elaboration levers** below to escalate.
+>    5. **An EARNED climax** — the final, hardest beat just before the win, so the win is *earned* by passing
+>       through the gauntlet, not handed over after one screen.
+>    6. **The teach as only the OPENING FRACTION** — M1's safe teach (item 3 of this list, "ONBOARDING") is a
+>       small slice at the front; the BULK of the level is the escalating real challenge above.
+>
+>    **The elaboration levers (escalate the SAME loop using the §2 capability table — never add a new SYSTEM
+>    the scope-cut forbids).** "Rich" = depth/length/escalation of the EXISTING loop (more instances of the
+>    named mechanics, harder numbers, denser placement), NOT feature creep:
+>    | archetype | how to lengthen + escalate the ONE level (more of the SAME, harder) |
+>    |---|---|
+>    | `platformer` | more platforms + more & WIDER gaps along a longer route; more / faster / re-placed patrols as interceptors over later gaps; tighter jump timing; greater distance between safe footholds; more moving hazards on the back half |
+>    | `top_down` | more & denser enemy waves or a sequence of rooms; faster/more chasers later; tighter dodge windows; reward pickups deeper inside contested space the further you go |
+>    | `grid_logic` | a longer solve (more board steps / a tighter `maxMoves` budget); more boxes/targets/keys-before-gates; later sub-puzzles compound earlier rules |
+>    | `tower_defense` | more waves, each larger / faster / tougher; mixed enemy counts rising per wave; the path/economy pressure tightening toward the final wave |
+>    | `ui_heavy` | more turns / a longer encounter; rising enemy HP or combo tiers; later turns demand sharper play than the opening hand |
+>    Pick the levers the archetype + prompt support; apply SEVERAL, concentrated on the LATER part of the path.
+>
+>    **The coverage floor — a countable RELATION, NEVER a genre constant.** Express richness as relations the
+>    next node can check, never as "5 platforms / 3 sunflowers":
+>    - **≥3 DISTINCT escalating challenge beats on the critical path** (the teach is ONE; at least two MORE,
+>      harder, after it) — *more beats/threats engaged than a single trivial one.*
+>    - **difficulty RISES across the level** — the later beats are *measurably harder than the teach* (wider
+>      gaps / tighter timing / more & faster threats), by the elaboration levers, never a flat repeat.
+>    - **the level is well BEYOND a single-screen crossing** — a real session, the bulk of it escalating
+>      challenge; *not* a ~30-second first-try win.
+>    These are relations (more-than, harder-than, longer-than), so they GENERALIZE to every archetype and
+>    cannot be reward-hacked into a fixed count.
+>
+>    **GOOD vs THIN (name the failure we keep getting).** A **THIN** design — the one that keeps shipping —
+>    *places the few entities the prompt literally named in a row on one screen and stops* (the cw1/ceval2
+>    gnome: 5 terraces, 3 sunflowers in a line, 1 crow, ~4 small gaps, beatable in ~30s on the first try).
+>    **That FAILS the floor.** A **GOOD** design *elaborates a LONG escalating gauntlet that re-exercises the
+>    loop at rising difficulty and ends in an earned climax* — many distinct beats, the threat contesting the
+>    path at several points and getting harder, a real session. **EXEMPLAR (thin → rich), generic:** thin =
+>    "place the 3 named collectibles in a row, one patrol nearby, a goal at the end of one screen — done." rich
+>    = "open with a safe teach beat; then a first contested pickup (a gap under the patrol's sweep); then a
+>    longer segment with two more pickups each guarded by a faster/re-placed threat and wider gaps; then a
+>    tight twist segment (tightest timing, densest threats); then the earned final approach to the goal — a
+>    long path of distinct, escalating risk decisions." (Generic illustration — re-derive from THIS prompt's
+>    theme + archetype; do not copy the gnome or these beats.)
+>
+>    Record the coupling in `PLAN.md` for EACH reward/goal: which threat contests it, where they meet, and
+>    where it sits on the rising curve — AND list the distinct beats in order with the escalation lever each
+>    uses. **W4 honors this placement** (it reads `## Playability`); a level whose threats sit in unvisited
+>    corners, or that stops after one trivial decision, is mis-designed — re-place/add threats and escalate,
+>    never weaken the loop.
+>    **The RICHNESS + DIFFICULTY FLOOR (the "not thin/short" guard):** structure round one as
+>    **teach → escalating tests → twist → earned climax**: the *teach* (M1) is the **opening fraction**
+>    where the verb is exercised safely (item 3 of the playability list), but the LEVEL AS A WHOLE is the
+>    *bulk* — the ≥3 distinct contested beats at rising difficulty ending in an EARNED win, not a trivial
+>    touch. "Start higher — round one is a real, substantial game, not a tutorial." A level that is *only* a
+>    safe teach, or that engages just ONE trivial threat and ends (a 30-second crossing), FAILS the floor;
+>    carry the classification's `mustPreserve` decision here as the core contested decision the rich level
+>    re-exercises. (After drafting, run the §3.7 self-critique against this floor and ELABORATE if thin.)
+>    _([E] Sid Meier "a game is a series of interesting decisions"; [E] Level Design Book "risk vs reward" +
+>    "teach, test, twist" + "pile of beats"; [E] GMTK "a level takes one or two ideas and iterates upon them
+>    to make it increasingly challenging — bumping up the gap, tightening timing, more enemies as
+>    interceptors"; the human's "harder, longer, content-rich single level"; `research/game-design-foundations.md`
+>    §C.1, §C.3, §C.4, §D.1, §E, §G.2.)_
+
+---
+
+## 3.6 The SCORE-MEANING contract (declare maxScore + idempotent rewards, OR no score)
+
+> **Why (`research/game-design-foundations.md` §B, §G.1):** the #1 score-meaning bug is an
+> open counter on a completion game — a number that climbs, that nobody uses, that has no max, and
+> that can be farmed after a respawn. The fix is two observable contracts (no new `__GAME__` field):
+> **maxScore** (bounded + reachable) and **idempotent rewards** (one-shot + respawn-safe). Score-need
+> is game-TYPE-dependent (Burgun/Juul/Redbrick): score iff `scoringModel != none`.
+
+Read `meta.scoringModel` (carried from the classification) and act on it:
+
+- **`scoringModel == none`** (pure completion / puzzle / narrative): declare **NO score**. No
+  `meta.maxScore`, no score readout — **the win is the readout**. Do NOT add a counter "because games
+  have scores." (Schell: a completion game's "score" is *finishing*; "reward" ≠ "points" — a Gateway
+  opening, juice/spectacle, or completion itself is the reward.) Assert NO vestigial score is surfaced.
+
+- **`scoringModel != none`** (`bounded-collectible` / `bounded-threshold` / `performance`):
+  1. **DECLARE `meta.maxScore`** — a **finite, reachable** total = **Σ of all idempotent reward values**
+     (e.g. 3 sunflowers × 1 = 3; 8 coins × 1 = 8). It is the knowable ceiling `score` can never exceed.
+  2. **Make every reward IDEMPOTENT** — in the reward mechanic's `description` state it is **one-shot
+     and respawn-safe**: it credits **exactly once, ever**; a second overlap does nothing; a
+     respawn/soft-reset/checkpoint **never re-credits** an already-counted reward (the collected-set
+     persists across respawns within a run). `score` is **monotone up to `maxScore`** and never exceeds it.
+  3. **Prefer a legible progress readout** — express score **against the max** (`X / maxScore`,
+     `% to goal`, `★★☆`, `wave K of W`) rather than a bare counter.
+  4. **Tie the score to the win** — the strongest meaning is a score that **gates or measures** the win
+     (collect-N-to-open-goal, par/stars, threshold). For `performance`, the score IS the goal and the run
+     must be **bounded by a fail/timer** so the number terminates (don't ship an unbounded open counter).
+  5. **Add the two SCORE ASSERTIONS** (the milestone that introduces rewards, §5):
+     - **(idempotent)** *"collecting the same reward twice (incl. after a respawn) does not increment
+       score"* — `observe: score`, `expect: { unchanged: true }` on a second overlap / a post-respawn
+       re-overlap of an already-collected reward.
+     - **(bounded)** *"score never exceeds maxScore"* — `observe: score`, `expect: { atMost: <maxScore> }`.
+
+These read only the observable `__GAME__.score` — no engine internals, no new field, no oracle change;
+the fix changes real reward-credit behavior (W4), never the test. Encode the RELATIONS (bounded by Σ;
+one reward credits once), never a per-game constant.
+
+---
+
+## 3.7 SELF-CRITIQUE / EXPANSION PASS — audit the draft against the RICHNESS FLOOR, then ELABORATE if thin
+
+> **Why:** your first draft of a small prompt is almost always THIN — it places the named entities on one
+> screen and stops (the cw1/ceval2 failure). A required second pass catches that *inside this node* before
+> you return, turning a 30-second crossing into the substantial level §3.5 demands. This is cheap and
+> high-yield; do not skip it. _([R] Self-Refine: generate → critique → revise; the critique must name
+> concrete gaps; [O] "before you finish, verify your answer against the criteria".)_
+
+After you have drafted `gdd.json` + `PLAN.md` but **BEFORE** you return, audit the draft against the §3.5
+RICHNESS + DIFFICULTY FLOOR. For EACH item, mark **PASS / FAIL** with one line of observable evidence from
+your own draft:
+
+1. **Long path of DISTINCT beats?** — Are there **≥3 distinct escalating challenge beats** on the critical
+   path (the teach + at least two more, harder, after it), spanning well beyond one screen? FAIL if the
+   level is one short screen / a single segment.
+2. **Threat contests the path REPEATEDLY?** — Is the core threat (kind) on or astride the route at
+   **multiple** points (more instances / faster / re-placed), not parked once? FAIL if a threat-free path to
+   any reward/goal exists, or the threat is engaged only once.
+3. **MULTIPLE risk-vs-reward decisions?** — Is more than one reward/goal **contested** by a threat the
+   player must engage? FAIL if only one trivial touch.
+4. **Difficulty RISES?** — Are later beats *measurably harder than the teach* (wider gaps / tighter timing /
+   more & faster threats, via the §3.5 elaboration levers)? FAIL if flat or front-loaded.
+5. **EARNED climax + teach is the OPENING FRACTION?** — Is the hardest beat near the end, with the teach a
+   small front slice (not the whole level)? FAIL if the win is reachable right after the teach.
+6. **No feature creep / scope-cut respected?** — Did you elaborate the SAME loop (more instances/length/
+   escalation of the named mechanics) WITHOUT adding a new SYSTEM the scope-cut forbids? FAIL if richness
+   came from a new mechanic/economy/enemy-TYPE instead of more-of-the-same-harder.
+
+**If ANY of 1–5 is FAIL, the draft is THIN — ELABORATE before returning:** ADD distinct contested beats,
+re-place/multiply the threat onto the later path, and ESCALATE the back half with the §3.5 levers (and
+extend the layout/coordinates in `PLAN.md ## Playability` + the milestones to match). Re-audit. **Only
+return a draft where 1–6 all PASS.** Never make a FAIL pass by weakening the loop, by adding a forbidden
+system (6 must stay PASS), or by inventing a multi-level ladder the prompt didn't ask for — the fix is a
+LONGER, HARDER single level of the same loop. (This is a self-check; VERIFY-1 then PROVES the same floor on
+the hardened numbers — §2/criterion 1 — so a thin draft that slips through here is still caught downstream,
+but catch it HERE where elaboration is cheap.)
 
 ---
 
@@ -227,9 +390,12 @@ feature, not every system"; [Y] Peter Yang "the right playable experience each t
    (the win condition, once met, makes the game END: `status` → `won`, replayed by VERIFY-2's
    completability gate) and/or a lose; never a design where you meet the win condition but the game
    never finishes. _(2026-06-11 frog1: the human collected the reward and the game wouldn't end.)_
-3. **Bounded 3-5, default 3.** Floor 3 = a core-loop slice + a risk/challenge slice + an end-state
-   slice (so every game exercises the reused verify harness across ≥3 stages); never fewer. Ceiling 5 = the
-   scope-control: more than 5 slices ⇒ cut back, don't grow.
+3. **Bounded 3-5, default 3 — these are build-slices of ONE rich level, not separate levels.** Floor 3 =
+   a core-loop slice + an escalating-challenge slice (the multiple contested decisions at rising difficulty
+   of §3.5) + an earned-end-state slice (so every game exercises the reused verify harness across ≥3
+   stages); never fewer. Ceiling 5 = the scope-control: more than 5 slices ⇒ cut back, don't grow. The
+   milestones decompose the SINGLE rich level by default — they are NOT one-level-per-milestone (a
+   multi-level ladder is the optional, on-demand case, §4.5).
 4. Each milestone carries **its own acceptance criteria + runtime assertions** (§5).
 5. Milestones are in **build order** (`M1`, `M2`, …); each builds on the last.
 
@@ -245,6 +411,67 @@ feature, not every system"; [Y] Peter Yang "the right playable experience each t
   can only be tested together, they're one milestone.
 
 Write the milestones into `gdd.json.milestones[]` AND mirror them as a checklist in `PLAN.md`.
+
+### 4.5 ONE RICH LEVEL is the default; a multi-level LADDER is OPTIONAL and ON-DEMAND only
+
+> **Why (`research/game-design-foundations.md` §C.1, §D.1, §E; the human's pivot):** difficulty matters
+> more than stage count. Round one should be a *complete, genuinely great single-level game* — harder,
+> longer, content-rich — with the within-level escalation of §3.5 (multiple contested decisions at rising
+> difficulty) carrying the experience. The scaffold ALSO ships multi-level machinery —
+> `templates/core/src/LevelManager.ts` with a `LEVEL_ORDER` array + `getNextLevelScene()/isLastLevel()`,
+> plus the multi-level end-screens — which makes "add another level" a CHEAP config + placement extension
+> *if and when the user explicitly asks for one*. It is a latent affordance, NOT a default to fill.
+
+- **`LEVEL_ORDER: ['Level1Scene']` (a single rich level) is the NORMAL case — NOT a deficiency.** Do NOT
+  default to a multi-level ladder; do NOT manufacture levels the prompt didn't ask for. The richness +
+  difficulty of the ONE level (§3.5) is where round one's quality lives, not in stage count. Map the
+  milestones as build-slices of the ONE rich level (engine plays → challenge live → earned win).
+- **A multi-level ladder is OPTIONAL and ON-DEMAND.** Build it ONLY when the prompt explicitly asks for
+  multiple levels / stages / a sequence. When it IS asked for, it stays CHEAP because the scaffold's
+  `LevelManager` already exists: each later level is a **config + placement diff over the same engine**
+  (wider gaps / tighter timing via config; more / faster threats on the path via placement; at most ONE
+  small added capability) — **NOT new code, never a fresh build** — mapped onto `LevelManager.LEVEL_ORDER`
+  (which already advances on win and whose end-screens already navigate "next level vs you-beat-the-game").
+  Respect the milestone ceiling (≤5) and the scope-cut; never let an asked-for ladder reintroduce a
+  scope-cut system.
+- Encode the RELATION "one rich, escalating level is the default; extra levels are cheap config/placement
+  diffs the user opts into," never a per-game level count and never a default ladder.
+
+Record this under `## Level Ladder` in `PLAN.md`: for the default case, `LEVEL_ORDER: ['Level1Scene']` +
+"one rich level — escalation is WITHIN the level (§3.5)"; only if a multi-level ladder was explicitly asked
+for, list the `LEVEL_ORDER` keys + the per-level escalation lever, so VERIFY-1 can prove each level reuses
+the engine and W4 fills the cheap variations.
+
+### 4.6 VIEWPORT vs WORLD — the viewport is the template screenSize; the world may be WIDER (camera follows)
+
+> **Why (bounds doctrine):** there are TWO distinct extents and authors keep conflating them. The
+> **VIEWPORT** is the browser frame the template fills via `Scale.FIT` — the `gameConfig.screenSize`,
+> **currently 1280×720 (16:9)**, full-bleed, never letterboxed (the f5104d0 fix; do not undo it). The
+> **WORLD** is the level's own extent (`layout.bounds`) — it is the viewport for a single-screen level,
+> **OR a MULTIPLE of it for a longer scrolling level**, with the **camera following the player** so the
+> viewport is always full of content at every scroll position.
+
+Whenever you author or imply a layout extent (where the goal sits, how far the level spans, where threats
+patrol), size it as a **RELATION to the template `screenSize` (currently 1280×720)**, never a magic
+constant — do NOT assume a free 960×540 / 800×600:
+
+- **VIEWPORT = the template `screenSize` (currently 1280×720).** Fixed; it fills the browser frame
+  (`Scale.FIT`). You never change it.
+- **WORLD (`layout.bounds`) = the screenSize for a single-screen level, OR a MULTIPLE of the viewport
+  width for a LONGER scrolling level** — e.g. `bounds.width = N × 1280` (N = 2, 3, …) for an N-screen
+  side-scroller. The **camera follows the player** (the template already does this when the world exceeds
+  the viewport), so the 1280×720 viewport stays full at every scroll position — no empty world, no
+  letterbox. For a single-screen world the camera is simply bounded and cannot scroll (also fine).
+- **A richer / longer level (the §3.5 richness floor) naturally uses a WIDER world.** A LONG escalating
+  critical path that spans well beyond one screen IMPLIES `layout.bounds.width` is a multiple of the
+  viewport width (a 3-screen gauntlet ⇒ `bounds.width ≈ 3 × 1280 = 3840`). Keep this coherent with §3.5:
+  if the path is long, the world is wide. The **world HEIGHT** normally stays one screen (720) for a
+  side-scroller (vertical scrolling is the exception, not the default).
+
+State it as the RELATION "viewport = the template screenSize; world `layout.bounds` = the viewport for one
+screen, or an integer multiple of the viewport width for a longer scrolling level, with the camera
+following the player," so it stays coherent if the template changes — never a magic constant, never a cap
+at one screen.
 
 ---
 
@@ -308,6 +535,12 @@ never engine internals):
    Book critical path; [repo] assertion-execution-grammar §2.4 `event` = "the event must happen for
    real".)_
 6. Use only `input.key` values that appear in `controls[]`.
+7. **SCORE assertions when `scoringModel != none` (§3.6).** The milestone that introduces rewards MUST
+   carry the two score assertions over the observable `__GAME__.score`: **(idempotent)** a second overlap
+   of the same reward — and a re-overlap AFTER a respawn — leaves `score` `{ unchanged: true }`; and
+   **(bounded)** `score` is `{ atMost: <maxScore> }`. These prove the reward credits once and the total is
+   capped — un-fakeable (they read the same `score` VERIFY-2 replays). If `scoringModel == none`, author
+   NO score assertion and surface no score readout (a vestigial counter is a defect VERIFY-1 catches).
 
 **The `expect` comparators** (set exactly one): `decreases` / `increases` / `changes` /
 `unchanged` / `equals:<val>` / `atLeast:<n>` / `atMost:<n>`. For an at-scene-start check (e.g.
@@ -351,6 +584,16 @@ OUT (scope-cut): <the classification.scopeCut list> [+ anything W1 pushed back]
 - [ ] **M3 — <name>**: <goal>  *(final — includes end-state)*
   - AC: ...
 
+## Level Ladder  (§4.5 — DEFAULT is ONE rich level; a multi-level ladder is OPTIONAL, only if the prompt explicitly asks)
+LEVEL_ORDER: ['Level1Scene']   # DEFAULT — one rich, escalating level; difficulty rises WITHIN the level (§3.5: multiple contested decisions, rising difficulty, real length). Viewport = template screenSize (1280×720); WORLD bounds = the viewport for one screen, or a MULTIPLE of the viewport width for a longer scrolling level (camera follows the player) — §4.6.
+# Only if the prompt EXPLICITLY asked for multiple levels, list the extra scene keys + the per-level escalation lever:
+# - <level 2>: SAME engine, escalation lever = <wider gaps / tighter timing / more-or-faster threats on the path / one new teach-test-twist mechanic> (config + placement, NOT new code)
+# - <level 3...>: ... final level ends in the game-complete end-state
+
+## Scoring  (§3.6)
+Model: <scoringModel>  ·  maxScore: <Σ reward values, or "none">  ·  Readout: <X / maxScore, or "the win is the readout">
+Idempotent: every reward one-shot + respawn-safe; score monotone 0..maxScore; <gates/measures the win>.
+
 ## Win / Lose
 Win: <winCondition.description>  ·  Lose: <loseCondition.description>
 ```
@@ -367,20 +610,23 @@ spike resets the attempt."`, `coreVerb:"jump"`:
     "archetype": "platformer",
     "coreLoop": "The player runs and jumps across platforms collecting coins and avoiding spikes to reach the exit; falling or hitting a spike resets the attempt.",
     "coreVerb": "jump",
+    "failModel": "respawn",
+    "scoringModel": "bounded-collectible",
+    "maxScore": 3,
     "artStyle": "bright pixel art, side-view",
     "physicsProfile": { "hasGravity": true, "perspective": "side", "movementType": "continuous" }
   },
   "entities": [
     { "id": "player", "role": "player", "description": "Side-view hero who runs and jumps.", "behaviors": ["PlatformerMovement"], "assetSlot": "player" },
-    { "id": "coin", "role": "collectible", "description": "Pickup that adds 1 to score on overlap.", "assetSlot": "coin" },
+    { "id": "coin", "role": "collectible", "description": "Pickup that adds 1 to score on overlap. IDEMPOTENT: one-shot (a collected coin never re-credits) and respawn-safe (the collected-set persists across a respawn). 3 coins => maxScore 3.", "assetSlot": "coin" },
     { "id": "spike", "role": "obstacle", "description": "Hazard that resets the attempt on contact.", "assetSlot": "spike" },
-    { "id": "exit", "role": "goal", "description": "Door that wins the level on reach.", "assetSlot": "exit" }
+    { "id": "exit", "role": "goal", "description": "Door that wins the level on reach (after all 3 coins => score gates the win).", "assetSlot": "exit" }
   ],
   "mechanics": [
     { "name": "run", "description": "Left/Right moves the player horizontally.", "capability": "PlatformerMovement" },
     { "name": "jump", "description": "Up makes the player jump against gravity.", "capability": "PlatformerMovement" },
-    { "name": "collect coin", "description": "Overlapping a coin removes it and increments score by 1." },
-    { "name": "hazard reset", "description": "Touching a spike or falling off-screen resets the attempt (lose)." }
+    { "name": "collect coin", "description": "Overlapping an UNCOLLECTED coin removes it and increments score by 1 (one-shot, respawn-safe — re-overlap or a post-respawn overlap of a collected coin does nothing); score is monotone up to maxScore 3 and gates the exit." },
+    { "name": "hazard reset", "description": "Touching a spike or falling off-screen resets the attempt to spawn; status stays 'playing' and the collected-set is NOT cleared (no re-farming)." }
   ],
   "controls": [
     { "input": "ArrowLeft", "action": "move left" },
@@ -414,25 +660,29 @@ spike resets the attempt."`, `coreVerb:"jump"`:
     },
     {
       "id": "M2", "name": "Collect coins, avoid spikes",
-      "goal": "The player can collect coins (score rises) and dies to spikes — the risk/reward is playable.",
+      "goal": "The player can collect coins (score rises, bounded + idempotent) and resets to spikes — the risk/reward is playable.",
       "acceptanceCriteria": [
-        "Overlapping a coin increments the score.",
+        "Overlapping an uncollected coin increments the score.",
+        "Collecting the same coin twice — including after a respawn — does NOT increment score (idempotent).",
+        "Score never exceeds maxScore (3).",
         "Touching a spike respawns the player at spawn (status stays 'playing' — recoverable, not terminal)."
       ],
       "assertions": [
-        { "id": "M2-A1", "describe": "overlapping a coin increments score", "input": { "type": "event", "target": "overlap:player,coin" }, "observe": "score", "expect": { "increases": true } },
-        { "id": "M2-A2", "describe": "touching a spike respawns the player to spawn.x (status stays 'playing', NOT 'lost' — this is a recoverable soft-fail)", "setup": { "state": { "player": { "x": 420, "y": 300 } } }, "input": { "type": "event", "target": "overlap:player,spike" }, "observe": "player.x", "expect": { "equals": 32 } }
+        { "id": "M2-A1", "describe": "overlapping an uncollected coin increments score", "input": { "type": "event", "target": "overlap:player,coin" }, "observe": "score", "expect": { "increases": true } },
+        { "id": "M2-A2", "describe": "re-overlapping an already-collected coin (incl. after a respawn) does NOT increment score (one-shot, respawn-safe)", "setup": { "state": { "score": 1 } }, "input": { "type": "event", "target": "overlap:player,coin" }, "observe": "score", "expect": { "unchanged": true } },
+        { "id": "M2-A3", "describe": "score never exceeds maxScore (3)", "input": { "type": "event", "target": "overlap:player,coin" }, "observe": "score", "expect": { "atMost": 3 } },
+        { "id": "M2-A4", "describe": "touching a spike respawns the player to spawn.x (status stays 'playing', NOT 'lost' — this is a recoverable soft-fail)", "setup": { "state": { "player": { "x": 420, "y": 300 } } }, "input": { "type": "event", "target": "overlap:player,spike" }, "observe": "player.x", "expect": { "equals": 32 } }
       ]
     },
     {
       "id": "M3", "name": "Win at the exit; soft-reset on fail",
       "goal": "Reaching the exit wins (terminal); a spike/fall soft-resets to spawn without ending the run — the game can finish.",
       "acceptanceCriteria": [
-        "From one hop short of the exit, reaching it sets status to won.",
+        "From one hop short of the exit with all 3 coins collected (score 3 = maxScore, the gate), reaching it sets status to won.",
         "A fail mid-level returns the player to spawn with status still 'playing' (non-terminal)."
       ],
       "assertions": [
-        { "id": "M3-A1", "describe": "from spawn one hop short of the exit (placed precondition), reaching the exit sets status to won", "setup": { "state": { "score": 1, "player": { "x": 600, "y": 300 } } }, "input": { "type": "keyHold", "key": "ArrowRight", "durationMs": 300 }, "observe": "status", "expect": { "equals": "won" } },
+        { "id": "M3-A1", "describe": "from one hop short of the exit with the score gate satisfied (score 3 = maxScore), reaching the exit sets status to won — score gates the win", "setup": { "state": { "score": 3, "player": { "x": 600, "y": 300 } } }, "input": { "type": "keyHold", "key": "ArrowRight", "durationMs": 300 }, "observe": "status", "expect": { "equals": "won" } },
         { "id": "M3-A2", "describe": "a mid-level fail returns the player to spawn while status stays 'playing' (non-terminal soft reset, never a 'lost' sink)", "setup": { "state": { "player": { "x": 420, "y": 300 } } }, "input": { "type": "event", "target": "overlap:player,spike" }, "observe": "player.x", "expect": { "equals": 32 } }
       ]
     }

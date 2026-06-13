@@ -19,10 +19,11 @@ raw game prompt and produce ONE on-disk artifact: `spec/classification.json`. Ev
 later node (W1 Spec, W2 Scaffold, …) reads that file — it is the contract, not your
 chat output. Nothing you "decide" survives except what you write to disk.
 
-Your job has exactly three parts:
+Your job has exactly four parts:
 1. **Classify** the prompt into one of five archetypes — by PHYSICS, not by genre name.
 2. **State the core loop** in one operational sentence.
-3. **Cut scope explicitly** — record what is deliberately OUT. This is the anti-slop guardrail.
+3. **Signal the scoring model** — derive whether/how this game-TYPE scores (§2.5), so W1 doesn't reflexively bolt a counter onto a completion game.
+4. **Cut scope explicitly** (with a scope-PRESERVE counter-pressure) — record what is deliberately OUT, but PRESERVE the one contested decision that makes round one a real game. This is the anti-slop guardrail AND the anti-tutorial guardrail.
 
 Do these, write the file, stop. Do NOT design mechanics, levels, milestones, or assets —
 that is W1's job. You are a router with a scope brake, not a game designer.
@@ -117,6 +118,34 @@ Bad (feature list, not a loop): `"A platformer with 5 levels, a shop, boss fight
 
 ---
 
+## 2.5 SIGNAL THE SCORING MODEL (game-TYPE decides whether to score)
+
+> Source pattern: `research/game-design-foundations.md` §A–§B (Burgun "completion vs high-score vs
+> score-test"; Juul "completion vs optimization goal"; Redbrick "Mario's vestigial score" → Mario
+> Wonder strips it). **Score-need is game-TYPE-dependent, not universal** — a bare open counter bolted
+> onto a completion game is the #1 score-meaning bug (a number that climbs, that nobody uses, that
+> has no max and can be farmed). W0 emits a `scoringModel` signal so W1 doesn't reflexively add one.
+
+Read the prompt's **GOAL-TYPE** (what the player is fundamentally doing) and emit one `scoringModel`:
+
+| GOAL-TYPE (from the prompt) | what the player does | `scoringModel` |
+|---|---|---|
+| **Completion** — reach an end-state, with NO countable rewards on the path | solve / traverse / clear | `none` |
+| **Completion** — reach an end-state by gathering a FINITE set of rewards | collect-N / clear-N then exit | `bounded-collectible` |
+| **Score-test** — hit a target / survive a declared count / beat an opponent | reach a threshold | `bounded-threshold` |
+| **Performance / score-attack** — maximize a number; the score IS the goal | survive / chain / optimize | `performance` |
+
+Rules:
+- **Default a completion prompt to `none` or `bounded-collectible`, NEVER `performance`.** Only emit
+  `performance` when the prompt's goal genuinely IS "how high / how long" (the run ends and the number
+  is final). Only emit `bounded-threshold` for an explicit target/wave/opponent.
+- The model is derived from the **goal-type the prompt implies, not the archetype** — a "puzzle" prompt
+  in `grid_logic` is usually `none`; a "how long can you survive" prompt in `top_down` is `performance`.
+- This is a SIGNAL to W1, not a design: W1 decides the exact `maxScore`/rewards. You only name the TYPE.
+  Encode the RELATION (goal-type → scoring model), never a per-prompt constant.
+
+---
+
 ## 3. HOW TO PRODUCE THE SCOPE-CUT (the anti-slop guardrail)
 
 > Source pattern — this is the #1 cross-source practice in the research: [E] Ziva "Scope
@@ -141,7 +170,7 @@ How to build the list (aim for 4–8 items):
 - Each entry is a short noun phrase naming a feature/system that will NOT be built (optionally
   "→ why" in a few words): e.g. `"multiplayer"`, `"save/load + persistence"`,
   `"procedural level generation"`, `"in-game economy / shop"`, `"dialogue/story cutscenes"`,
-  `"more than one level"`, `"online leaderboards"`.
+  `"multiple levels / stages (round one is one rich level)"`, `"online leaderboards"`.
 - **Always cut by default** (unless the prompt makes one of these the literal core loop) —
   these are the standard AI-codegen over-scope traps _([Y] Chong-U; [E] videogame.link, gammer)_:
   multiplayer/networking, account/login, save/cloud-save, monetization/analytics, procedural
@@ -153,8 +182,37 @@ How to build the list (aim for 4–8 items):
 - Keep entries general and reusable — name the *system* being cut, not one named feature from
   this one prompt (Hermes law: a cut that only helps one prompt is a bug).
 
+**The scope-PRESERVE counter-pressure (so the cut doesn't gut the game into a tutorial, and a small
+prompt isn't taken literally as a tiny level).**
+> Source pattern: `research/game-design-foundations.md` §C, §D, §E, §G.2 (the "start higher / round one
+> is a real game" + within-level escalation principles). The cut is a brake, not a wrecking ball:
+> over-applied, it produces a trivial one-level "telling kids to play" game with no contested decision.
+- The cut removes **SYSTEMS**, but must **NOT** reduce round one below "a real game with **≥1 contested
+  decision**" (a risk weighed against a reward on the critical path). Record that decision so W1 cannot
+  cut the game down to a teach: set the optional **`mustPreserve`** field naming the core contested
+  decision in one line (e.g. `"reach the goal through the hazard, not around it"`), OR if you omit the
+  field, the doctrine still binds W1 (round one is a real game, never a tutorial). Encode the RELATION
+  "preserve the one contested decision," never a per-prompt constant.
+- **A small prompt is a THEME to ELABORATE, NOT a tiny level taken literally.** This is the recurring
+  failure to pre-empt: a brief prompt (e.g. "a gnome waters 3 sunflowers, dodging a crow") gets read as a
+  literal shopping list — its few named entities placed in a row on one screen, beatable in 30 seconds — and
+  the result is a thin tutorial-grade crossing. **A short prompt does NOT mean a short game.** The prompt
+  names the THEME + the core loop; round one is meant to be a complete, harder, longer, content-RICH game in
+  ONE level — the named entities are the *seed* W1 elaborates into a LONG, escalating critical path (more
+  instances of the same mechanics, rising difficulty, an earned climax — the within-level escalation is W1's
+  job, §3.5). Signal this ambition: set `mustPreserve` as the *core contested decision a SUBSTANTIAL single
+  level re-exercises at rising difficulty* (a relation, not a one-screen layout). A single rich level is
+  the DEFAULT; do NOT add a ladder requirement or imply multiple levels — richness is depth/length/escalation
+  of the ONE level, not stage count. New mechanics/systems beyond the loop are still scope creep → cut them;
+  **multiple levels / stages are also OUT of v1 by default** (cut
+  `"multiple levels / stages (round one is one rich level)"`) **unless the prompt explicitly asks for a
+  sequence of levels** — in which case the scaffold's `LevelManager` makes extra levels a cheap
+  config/placement extension W1 may add, so do not pre-cut an explicitly-requested level sequence.
+
 The scope-cut is a hard contract: downstream nodes treat anything on this list as
-out-of-bounds. W1 sizes its milestone list (2–5) to what remains AFTER the cut.
+out-of-bounds. W1 sizes its milestone list (3–5 build-slices of the ONE rich level) to what remains AFTER
+the cut — and keeps round one a real, substantial game (it cannot cut below the preserved contested
+decision).
 
 ---
 
@@ -174,7 +232,9 @@ it does not exist. Write nothing else.
 | `physicsProfile` | object | yes | `{ hasGravity: bool, perspective: "side"\|"top_down"\|"none", movementType: "continuous"\|"grid"\|"path"\|"ui_only" }`. The structured physics that justifies the archetype. |
 | `reasoning` | string | yes | 1–2 sentences: which physics question(s) decided the archetype. Cite the KEY QUESTION you used. |
 | `confidence` | enum | yes | `high` \| `medium` \| `low` (see §1 + §5). |
-| `scopeCut` | string[] | yes | The §3 list of things deliberately OUT. 4–8 short noun phrases. Non-empty. |
+| `scoringModel` | enum | yes | The §2.5 scoring signal: `none` \| `bounded-collectible` \| `bounded-threshold` \| `performance`, derived from the prompt's GOAL-TYPE. Tells W1 whether/how to score (completion default = `none`/`bounded-collectible`; performance/survival = `performance`; explicit target = `bounded-threshold`). |
+| `scopeCut` | string[] | yes | The §3 list of things deliberately OUT. 4–8 short noun phrases. Non-empty. Cuts systems AND multiple levels by default (round one is one rich level); does NOT cut the juice or the contested decision; does not pre-cut an explicitly-requested level sequence. |
+| `mustPreserve` | string | no | The §3 scope-PRESERVE: the ONE core contested decision the cut must NOT remove (so W1 keeps round one a real game, not a tutorial). One line, a relation (e.g. "reach the goal through the hazard, not around it"). Omit only if a pure sandbox prompt genuinely has no contested decision. |
 | `coreFantasy` | string | no | Optional ≤8-word emotional hook (e.g. "a nimble hero racing to the goal"). Helps W1 + W3; omit if not obvious. |
 
 ### Worked example — **EXAMPLE ONLY, DO NOT COPY. Reclassify every real prompt from scratch.**
@@ -188,7 +248,9 @@ For the prompt *"a game where you push boxes onto targets to solve puzzles"*:
   "physicsProfile": { "hasGravity": false, "perspective": "top_down", "movementType": "grid" },
   "reasoning": "Movement happens in discrete grid steps (Sokoban-style) — the grid_logic KEY QUESTION fires; no gravity and no free analog motion.",
   "confidence": "high",
-  "scopeCut": ["multiplayer", "save/load + persistence", "level editor", "more than a handful of built-in levels", "story/dialogue", "in-game shop/economy", "mobile/touch controls (desktop keyboard only)", "procedural level generation"],
+  "scoringModel": "none",
+  "scopeCut": ["multiplayer", "save/load + persistence", "level editor", "multiple levels / stages (round one is one rich level)", "story/dialogue", "in-game shop/economy", "mobile/touch controls (desktop keyboard only)", "procedural level generation"],
+  "mustPreserve": "solve the room before pushing a box into an unrecoverable corner — the real decision each move",
   "coreFantasy": "a methodical solver clearing one room at a time"
 }
 ```

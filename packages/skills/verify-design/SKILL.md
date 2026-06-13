@@ -101,10 +101,21 @@ Judge the design on these seven criteria **in order**. Each is PASS / FAIL / HAR
 The first four are **mechanical/decidable on the numbers**; the last three are design judgments grounded
 in named principles.
 
-1. **REAL INTERESTING DECISION (§2).** Is there a meaningful player choice each loop — a risk weighed
-   against a reward — or is it a chore (trigger mechanics in isolation, no decision)? Reject trivial
-   loops. _([E] Sid Meier "a game is a series of interesting decisions"; [E] Level Design Book "risk vs
-   reward — the player weighs the danger against the payoff".)_
+1. **REAL INTERESTING DECISION + SUBSTANTIAL-LEVEL FLOOR (§2).** Is there a meaningful player choice each
+   loop — a risk weighed against a reward — or is it a chore (trigger mechanics in isolation, no decision)?
+   Reject trivial loops. **Strengthened to the SUBSTANTIAL-LEVEL FLOOR (decidable on the numbers): round one
+   must be a rich, escalating single-level game — the reference solution (§3) must PASS THROUGH ≥3 DISTINCT
+   contested decisions, on a path well BEYOND a single screen, with the LATER beats MEASURABLY HARDER than
+   the teach (ESCALATING difficulty shown on the numbers).** A winnable path that engages NO threat, OR
+   engages only ONE trivial threat and ends (a thin/short 30-second crossing — the cw1/ceval2 "few named
+   items in a row, one patrol, first-try win" shape), ⇒ FAIL (the observable form of "too simple" — round
+   one is a thin tutorial, not a substantial game); HARDEN by ADDING / ESCALATING challenge on the path
+   (more contested decisions of the SAME loop, rising difficulty along a longer route), never by weakening
+   and never by adding a scope-cut system. A single rich level is the correct shape; do NOT demand multiple
+   levels. _([E] Sid Meier "a game is a series of interesting
+   decisions"; [E] Level Design Book "risk vs reward"; [E] GMTK "one or two ideas iterated to get
+   increasingly challenging"; `research/game-design-foundations.md` §C.1, §D.1, §E, §G.2 — a harder,
+   longer, content-rich single level.)_
 2. **THREAT-ON-REWARD-PATH TENSION, FORMALIZED (§4) — statically decidable.** Does an **undesirable
    solution** exist: is the win / each reward reachable WITHOUT engaging the intended threat or decision?
    If a path from spawn to goal/reward avoids every threat region → **FAIL**; harden by re-placing the
@@ -144,19 +155,38 @@ in named principles.
 7. **PILLAR / TENET ALIGNMENT (§6).** Does every design choice serve the stated core loop, or has the
    design drifted (a mechanic/entity that serves nothing, or contradicts the loop)? _([best-practices §Q1
    pillar/anti-pillar alignment "does the design honor the stated tenets, or drift".)_
+8. **SCORE BOUNDED + IDEMPOTENT + COHERENT (§4.5) — decidable on the numbers.** If `meta.scoringModel !=
+   none`: prove (score-bounded) `maxScore` is finite, reachable, and `== Σ(reward values)` from `layout`,
+   and `score ≤ maxScore`; (score-idempotent) the reward-credit is one-shot + respawn-safe — NO
+   `respawn → re-credit` edge (the *score* analogue of the *status* monotonicity check), a second overlap
+   leaves `score` unchanged; (score-coheres) if the win is score-gated, `gate-threshold ≤ maxScore` AND the
+   threshold reward-set is reachable. If `scoringModel == none`, assert **no vestigial score counter** is
+   surfaced. _(`research/game-design-foundations.md` §B, §F.3, §G.1 — the score-meaning fix.)_
+9. **ENGINE-REUSE LADDER (§4.6) — CONDITIONAL; decidable on the blueprint.** **Applies ONLY IF the design
+   explicitly declares a multi-level ladder** (`LEVEL_ORDER` has >1 entry). A **single rich level**
+   (`LEVEL_ORDER: ['Level1Scene']`) is the DEFAULT and is VALID — it does NOT fail this criterion and must
+   NOT be failed for "leaving `LevelManager` unused" (the machinery is a latent on-demand affordance, not a
+   requirement to fill). IF a ladder IS declared: prove each ladder level is a **config/placement diff over
+   the shared engine** (not a bespoke new system), each level **independently completable** (per-level
+   reference solution), and the ladder **advances on win** to a final game-complete end-state (no
+   inter-level soft-lock). _(`research/game-design-foundations.md` §D, §F.2, §G.3 — engine-reuse is what
+   keeps an asked-for ladder cheap; the single rich level carries round one's quality.)_
 
-**If criteria 1–4 cannot be satisfied by hardening, the verdict is `DESIGN_FAILED`** with the specific
-criterion + numbers; you DO NOT ship a design that is unwinnable, unfair, or a chore. Criteria 5–7 inform
-the verdict and the revise loop, and are recorded with named principles for the human steward.
+**If criteria 1–4 (and the score-bounded/idempotent/coherence checks of 8 when a score exists) cannot be
+satisfied by hardening, the verdict is `DESIGN_FAILED`** with the specific criterion + numbers; you DO NOT
+ship a design that is unwinnable, unfair, a chore, or whose score is unbounded/farmable. Criteria 5–7 and
+the engine-reuse check (9) inform the verdict and the revise loop, and are recorded with named principles
+for the human steward.
 
 ---
 
-## 2. CRITERION 1 — IS THERE A REAL INTERESTING DECISION?
+## 2. CRITERION 1 — IS THERE A REAL INTERESTING DECISION, AND IS THE LEVEL SUBSTANTIAL?
 
 A loop can be reachable, legible, and safely onboarded and STILL be a chore: winnable by ignoring the
 threat entirely (collect in open space while the enemy patrols an empty corner — this is the exact td1
-flaw, §10). State, in `DESIGN_REVIEW.md` and structurally in the blueprint, the **one interesting
-decision** the core loop forces:
+flaw, §10), OR so thin it engages one trivial threat and ends in 30 seconds. Round one must be a *rich,
+escalating single-level game*. State, in `DESIGN_REVIEW.md` and structurally in the blueprint, the
+**interesting decision** the core loop forces AND that the level re-exercises it at rising difficulty:
 
 - Name the **reward** (what the player gains: a collectible that gates the win, progress, safety) and the
   **risk** (the threat that contests it: a hazard on the route, a patrol whose region overlaps the
@@ -164,14 +194,31 @@ decision** the core loop forces:
 - The decision is real iff **taking the reward (or reaching the goal) requires entering the threat's
   space** — the player must weigh danger against payoff. If the reward is free (no threat on its path),
   there is **no decision** → fail criterion 2 and re-place the threat (§4).
-- Encode the RELATION "the threat contests the reward path," **never a genre constant** (not "guard at
-  x=900"). _([E] Sid Meier "series of interesting decisions"; [E] GMTK "tension comes from threats placed
-  along the player's route, not beside it"; write-gdd/SKILL.md §3.5 CHALLENGE — the pillar this node now
-  PROVES on the numbers rather than only asserting.)_
+- **SUBSTANTIAL, not thin — PROVE it on the reference solution (a countable RELATION).** The critical path
+  must hold **MULTIPLE contested decisions** (more than one reward/goal each contested by a threat the player
+  must engage) at **ESCALATING difficulty** (later contests are harder — wider gaps / tighter timing / more &
+  faster threats). The proof obligation, decidable on `referenceSolution.steps[]` + `coupling[]` + the layout
+  geometry: the reference solution must **PASS THROUGH ≥3 DISTINCT escalating challenge beats** on a path
+  **well beyond a single-screen crossing**, where **the later beats are MEASURABLY harder than the teach**
+  (the numbers show it — a wider gap, a tighter passable window, a faster/denser threat), ending in an EARNED
+  climax. These are RELATIONS (≥3 distinct beats; later-harder-than-teach; longer-than-one-screen) you check
+  on the numbers, **never a genre constant**. A reference solution that engages **no threat**, or **only ONE
+  trivial threat and ends** (a thin/short ~30-second crossing — the cw1/ceval2 gnome shape: a few named items
+  in a row, one patrol, beatable first-try), **FAILS the floor as "too simple."** → HARDEN by ADDING contested
+  decisions and ESCALATING the curve along the path (re-place/add threats ON the path using the SAME loop's
+  mechanics, tighten the later numbers, lengthen the path) and re-derive the reference solution through them
+  — never by weakening the loop, never by adding a new SYSTEM the scope-cut forbids, and never by demanding
+  extra levels (a single rich level is the correct shape).
+- Encode the RELATION "the threat contests the reward path, repeated at rising difficulty," **never a genre
+  constant** (not "guard at x=900", not a hard count of decisions). _([E] Sid Meier "series of interesting
+  decisions"; [E] GMTK "one or two ideas iterated to make it increasingly challenging"; write-gdd/SKILL.md
+  §3.5 RICHNESS + DIFFICULTY FLOOR — the pillar this node now PROVES on the numbers rather than only
+  asserting; `research/game-design-foundations.md` §C.1, §D.1, §E.)_
 
-A loop with no risk-weighed-against-reward is a chore; harden it (place the threat on the path) or, if the
-prompt genuinely has no threat (a pure sandbox toy), record the decision as the player's self-set goal and
-relax criterion 2 explicitly with reasons (do not silently pass it).
+A loop with no risk-weighed-against-reward is a chore; a level with only one trivial contest is thin —
+harden either (place/add threats on the path, escalate the curve) or, if the prompt genuinely has no threat
+(a pure sandbox toy), record the decision as the player's self-set goal and relax criterion 2 explicitly
+with reasons (do not silently pass it).
 
 ---
 
@@ -266,6 +313,75 @@ threat to remove the "violation") — that inverts the fix; re-place the threat.
 
 ---
 
+## 4.5 CRITERION 8 — SCORE BOUNDED + IDEMPOTENT + COHERENT (the score-meaning proofs)
+
+> The score analogue of the §4 threat check and the §5 status-coherence check — **observable, decidable,
+> no new `__GAME__` field** (it reasons over `score`, `maxScore`, reward counts, and the win gate the
+> design already declares). _(`research/game-design-foundations.md` §B, §F.3, §G.1.)_
+
+Read `meta.scoringModel`:
+
+- **`scoringModel == none`** → prove **no score is surfaced**: no `meta.maxScore`, no score readout in the
+  mechanics/HUD, no milestone assertion over `score`. A vestigial counter on a completion game is the bug
+  — flag it and HARDEN by removing the score (the win is the readout). Record under criterion 8 and move on.
+- **`scoringModel != none`** → prove all three, on the numbers:
+  1. **score-bounded.** `maxScore` is finite, reachable, and **`== Σ(reward values)`** — sum the reward
+     values from `layout.rewards[]` (each reward's credit value, default 1) and confirm equality; confirm
+     every counted reward is reachable per §3. Record `numbersUsed` (the per-reward values and their sum).
+     A `maxScore` that is missing, infinite, `> Σ`, or `< Σ` ⇒ HARDEN to `Σ` (or FAIL if the rewards can't
+     sum to a reachable total). Carry the invariant `score ≤ maxScore` into an AC.
+  2. **score-idempotent.** The reward-credit flow must be **one-shot + respawn-safe**: in the frozen
+     win/lose/respawn flow (§5), confirm there is **NO `respawn → re-credit` edge** — a respawn/soft-reset
+     does not clear the collected-set and re-credit an already-counted reward (the *score* analogue of the
+     immutable *status* monotonicity: `score` is monotone up to `maxScore` within a run). HARDEN the flow
+     to mark each reward one-shot and to persist the collected-set across respawns. Author the AC: a second
+     overlap (incl. post-respawn) of a collected reward leaves `score` unchanged.
+  3. **score-coheres.** If the win is **score-gated** (`winCondition.observable` reads `score >= N` or the
+     goal opens only at a score), prove **`gate-threshold (N) ≤ maxScore`** AND the threshold reward-set is
+     **reachable** (the N rewards are all placed + reachable per §3) — otherwise the gate is unreachable
+     (soft-lock) or trivially padded. HARDEN by setting `N ≤ maxScore` and ensuring the rewards reach it.
+
+Author the score ACs as Given/When/Then over `score` (so VERIFY-2 replays them): the bounded AC
+(`observe: score, expect: atMost: maxScore`) and the idempotent AC (a re-overlap incl. after a respawn
+⇒ `score unchanged`). **Never weaken to pass** (don't drop `maxScore` to dodge the bound, don't relax
+idempotency) — the fix changes the real credit flow, never the test.
+
+---
+
+## 4.6 CRITERION 9 — ENGINE-REUSE LADDER (CONDITIONAL — only if a multi-level ladder is explicitly declared)
+
+> **A single rich level is the DEFAULT and is VALID** — round one's quality lives in the WITHIN-level
+> richness + escalation (criterion 1 / §2), not in stage count. This criterion applies **ONLY IF** the
+> blueprint explicitly declares a multi-level ladder (`LEVEL_ORDER` has >1 entry, because the prompt asked
+> for a sequence of levels). When it does, the later levels must be CHEAP (config + placement), not new
+> bespoke systems. _(`research/game-design-foundations.md` §D, §F.2, §G.3.)_
+
+**IF `LEVEL_ORDER` has a SINGLE entry (the default):** this criterion is **N/A — record it as a PASS/skip
+with the reason "single rich level; escalation is within-level (criterion 1)."** Do NOT fail a design for
+"leaving `LevelManager` unused" or for "shipping one bespoke level" — a single rich level is correct, and
+the multi-level machinery is a latent on-demand affordance, not a requirement to fill.
+
+**IF a multi-level ladder IS declared (`LEVEL_ORDER` > 1 entry),** prove:
+- **Config/placement diff, not new code.** Each later level differs from the shared engine only by
+  `config` (wider gaps, tighter timing) + `layout` placement (more/faster threats on the path) + **at most
+  one** small added capability — NOT a new mechanic/system the engine didn't already carry. A level that
+  needs a pile of new systems is scope creep → flag it (route back to W1) or fold it into the engine.
+- **Each level independently completable.** A per-level reference solution exists (a winnable path that
+  engages ≥1 contested decision — the §3/§2 checks applied per level), and the level fits its world bounds
+  (`layout.bounds` = the viewport for one screen, or a multiple of the viewport width for a longer
+  scrolling level with the camera following the player, §5).
+- **The ladder advances on win to a final game-complete end-state.** The `LevelManager.LEVEL_ORDER`
+  sequence advances on each level's win and the final level reaches the game-complete end-state — **no
+  inter-level soft-lock** (a level whose win doesn't advance, or a later level unreachable). Status-model
+  coherence (§5) holds per level AND across the ladder.
+
+Record the criterion-9 result under criterion 9 in `DESIGN_REVIEW.md`: either the single-level skip (with
+reason) OR, for a declared ladder, the `LEVEL_ORDER` + per-level escalation lever + per-level winnability.
+This is the design-side guard that — *when a ladder was asked for* — the multi-level machinery is actually
+used and that "layering" stayed cheap (config-not-code).
+
+---
+
 ## 5. CRITERION 4 — HARDEN THE BLUEPRINT (fill every number the executor needs)
 
 You are the **design authority**: where W1 left a tunable implicit, you make it explicit and concrete so
@@ -281,6 +397,20 @@ a concrete value, grounded in the §3 feasibility math (never a guess that break
 - **Entity placement** (`layout`): concrete spawn/goal/reward/threat **coordinates** (or grid cells), so
   the level is fully determined. The player spawn, the goal position, every collectible position, every
   threat position + its **patrol route** (waypoints) + **timing** (speed or per-segment duration).
+  - **VIEWPORT vs WORLD — `layout.bounds` is the WORLD, which may be WIDER than the viewport (camera
+    follows).** The **VIEWPORT** is the template `screenSize` (currently **1280×720**, 16:9) — it fills the
+    browser frame via `Scale.FIT` (the f5104d0 fix; do NOT undo it). The **WORLD** (`layout.bounds`) is the
+    viewport for a single-screen level, **OR an integer MULTIPLE of the viewport width for a LONGER
+    scrolling level** (e.g. `bounds.width = N × 1280` for an N-screen side-scroller), with the **camera
+    following the player** so the viewport is always full of content at every scroll position (no empty
+    world, no letterbox). The world HEIGHT normally stays one screen (720) for a side-scroller. A rich/long
+    §2 path (well beyond one screen) IMPLIES a wide world: confirm `bounds.width` is a multiple of the
+    viewport width consistent with the path length (a 3-screen gauntlet ⇒ `bounds.width ≈ 3840`); a level
+    capped at the single viewport while the path is long under-fills the design — HARDEN `bounds.width` to
+    the multiple the path needs. Author/confirm `bounds` as this RELATION (viewport = the template
+    screenSize; world = the viewport for one screen, or a multiple of the viewport width for a longer
+    level, camera-follow), never a free 960×540 / 800×600 and never a magic constant. Every placement (and
+    every referenced foothold below) must sit inside these `bounds`.
   - **REFERENCED ⇒ DECLARED (the completeness closure — archetype-agnostic).** Every spatial element that
     `coupling[]`, `referenceSolution.steps[]`, or the §3 core traversal **names, stands on, or passes
     through** MUST exist as a DECLARED element in `layout` with coordinates **inside `bounds`** — whatever
@@ -318,6 +448,14 @@ a concrete value, grounded in the §3 feasibility math (never a guess that break
   gaps early"; template-contract §3.3 status normalization is the observable target;
   `packages/verify/src/invariants.ts isLegalStatusTransition` — 'won'/'lost' terminal, immutable;
   2026-06-11 frog1 escalation, §10.)_
+- **The SCORE contract (when `meta.scoringModel != none`) — harden per §4.5.** Confirm `meta.maxScore`
+  is present and `== Σ(reward values)` from `layout.rewards[]` (HARDEN to `Σ` if missing/wrong); confirm
+  the reward-credit flow is one-shot + respawn-safe (no `respawn → re-credit` edge — HARDEN the flow if
+  it re-credits); if the win is score-gated, confirm `gate-threshold ≤ maxScore` and the threshold set is
+  reachable. **Author the two score ACs** (bounded: `observe score, expect atMost maxScore`; idempotent:
+  a re-overlap incl. post-respawn ⇒ `score unchanged`) — ID-linked to the gdd score assertions. When
+  `scoringModel == none`, confirm NO score is surfaced and author no score AC. _(`research/game-design-foundations.md`
+  §B, §F.3, §G.1.)_
 - **Boundary-value sweep:** for every numeric relationship, plug the min and max plausible values and
   confirm no degenerate output (a `maxMoves` of 0, a `jumpPower` that overshoots the whole level, a patrol
   speed that makes a window negative). Record any value you clamped. _([best-practices §Q1 systems-designer
@@ -443,7 +581,7 @@ requires (`meta`, `entities`, `mechanics`, `controls`, `winCondition`, `loseCond
         "route": [ { "x": 380, "y": 320 }, { "x": 480, "y": 320 } ],
         "speed": 80, "periodMs": 2500 }   // route + timing — no missing motion number
     ],
-    "bounds": { "width": 800, "height": 600 }
+    "bounds": { "width": 1280, "height": 720 }   // WORLD = the viewport (1280×720) for a single-screen level; a LONGER scrolling level sets width to a MULTIPLE of the viewport width (e.g. 3840 = 3 screens) and the camera follows the player (§5)
   },
   "coupling": [                     // §4: every reward/goal has a contesting threat ON its path
     { "for": "coin_1", "threat": "patrol_1", "meetsAt": { "x": 420, "y": 300 },
@@ -498,7 +636,7 @@ For the human steward (the eye). Shape:
 _Archetype: <archetype> · Core loop: <coreLoop> · The interesting decision: <one line>_
 
 ## Rubric (per criterion: verdict + the principle + the numbers)
-1. Interesting decision — PASS — <reward> vs <threat>; getting it requires entering <region>.
+1. Interesting decision + substantial level — PASS — <reward> vs <threat>; the path holds <N> contested decisions at rising difficulty (the reference solution passes through all of them); not a thin one-threat crossing.
 2. Threat-on-reward-path — PASS — no threat-free path to any reward/goal (BFS/geodesic shown below).
 3. Winnability (kinematics) — PASS — every gap ≤ d_max(206.7), every required rise ≤ h_max(159.8); passable window 900ms ≥ dwell.
 4. Completeness + status-model coherence — HARDENED — filled patrol route+timing, 3 coin coords; win/lose/respawn flow coherent with terminal status (recoverable fail kept non-terminal on a distinct observable; 'lost' reserved for game-over).
@@ -579,9 +717,13 @@ design node, never to the executor"; §Q8 "hitting limits is a feature — surfa
 ## 10. EDGE & FAILURE HANDLING
 
 - **`classification.confidence: "low"` / under-specified prompt.** W1 may have re-anchored to the
-  archetype's basic loop. Judge what's there; if the design is a thin-but-valid canonical loop (verb +
-  one threat-on-path + win/lose), harden and PASS — don't demand richness the prompt didn't ask for.
-  Record the thinness in `DESIGN_REVIEW.md`. _(write-gdd/SKILL.md §7 low-confidence handling.)_
+  archetype's basic loop. Judge what's there — but an under-specified prompt is NOT license for a thin
+  level: round one is still elaborated into a RICH single level (multiple contested decisions at rising
+  difficulty, real length — criterion 1 / §2). If W1 shipped only a single trivial contest, HARDEN it by
+  ADDING contested decisions and ESCALATING the curve along the path (you are the design authority); do
+  NOT pass a thin crossing as "the prompt didn't ask for more." Don't invent NEW SYSTEMS or extra LEVELS
+  the prompt didn't ask for — enrich the ONE level. Record the hardening in `DESIGN_REVIEW.md`.
+  _(write-gdd/SKILL.md §7 low-confidence handling + §3.5 richness floor.)_
 - **The threat is decoupled from the reward path (the td1 flaw).** This is the headline failure this node
   exists to catch: W1's `## Playability` claimed a tense loop but the guard sat in an unvisited corner and
   the three rewards "didn't face off with any danger" (`skill-system-map.md` 2026-06-10). Criterion 2 (§4)

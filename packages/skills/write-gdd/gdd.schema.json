@@ -36,6 +36,16 @@
           "enum": ["health", "lives", "respawn", "none"],
           "description": "The ONE fail-model the design chose. The HUD surfaces only the resource this drives (health⇒HP bar, lives⇒life counter, respawn⇒spawn-return/none, none⇒sandbox). Must agree with loseCondition.observable. Prevents an inert maxHealth from being rendered as a phantom health bar (frog1)."
         },
+        "scoringModel": {
+          "type": "string",
+          "enum": ["none", "bounded-collectible", "bounded-threshold", "performance"],
+          "description": "Carried from classification.json (SKILL §3.6). Decides whether/how to score. none ⇒ declare NO score (the win is the readout, no maxScore). Non-none ⇒ declare maxScore and make every reward idempotent (one-shot, respawn-safe). Never bolt a bare open counter onto a completion game."
+        },
+        "maxScore": {
+          "type": "number",
+          "minimum": 0,
+          "description": "REQUIRED when scoringModel != none: the finite, reachable score ceiling = Σ of all idempotent reward values (e.g. 3 coins × 1 = 3). score is monotone 0..maxScore and never exceeds it; prefer an X/maxScore readout and tie it to the win. OMIT when scoringModel == none (no score exists). VERIFY-1 proves maxScore == Σ(reward values); VERIFY-2 asserts score ≤ maxScore."
+        },
         "artStyle": { "type": "string", "minLength": 1, "description": "Short art-direction note (e.g. 'pixel art, bright, side-view'). Feeds W3 asset generation; 'placeholder' is valid for v1." },
         "physicsProfile": {
           "type": "object",
